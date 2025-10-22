@@ -13,7 +13,7 @@ Target users include network administrators, security professionals, and develop
   - golang.org/x/net/icmp for ICMP protocol implementation
   - gateway (github.com/jackpal/gateway) for gateway detection
 - **Scripting Engine**: d5/tengo (github.com/d5/tengo/v2) for embedded scripting with sandboxed execution
-- **Storage**: SQLite (github.com/mattn/go-sqlite3) for persistent device history, alerts, and tool execution logs
+- **Storage**: bbolt (go.etcd.io/bbolt) for persistent device history, alerts, and tool execution logs
 - **CLI Framework**: Cobra (github.com/spf13/cobra) for command-line interface with Viper (github.com/spf13/viper) for configuration management
 - **Testing**: Go's built-in testing package with target >80% code coverage, table-driven tests for business logic
 - **Build/Deploy**: Standard Go build toolchain, Makefile for build automation, CI/CD pipeline planned
@@ -38,7 +38,7 @@ Target users include network administrators, security professionals, and develop
 
 - **Domain**: Network diagnostics and security monitoring with focus on real-time device discovery, change tracking, and alerting. Core business logic centers around multi-method parallel scanning, device state management with temporal tracking, and event-driven alerting system. Critical concepts include NAT traversal (UPnP/NAT-PMP), MAC vendor identification via OUI database, and network topology visualization.
 
-- **Architecture**: Layered architecture with three tiers: (1) System/Network Interface Layer for raw sockets and OS network APIs, (2) Core Engine Layer containing Network Scanner, Device Tracker, Network Tools, and Script Engine, (3) TUI Layer with Bubble Tea framework managing multiple views. Components communicate through channels and event dispatching. State management uses in-memory registry with SQLite persistence for history.
+- **Architecture**: Layered architecture with three tiers: (1) System/Network Interface Layer for raw sockets and OS network APIs, (2) Core Engine Layer containing Network Scanner, Device Tracker, Network Tools, and Script Engine, (3) TUI Layer with Bubble Tea framework managing multiple views. Components communicate through channels and event dispatching. State management uses in-memory registry with bbolt persistence for history.
 
 - **Key Directories**:
   - `cmd/tuimap/`: Main application entry point with CLI setup
@@ -50,7 +50,7 @@ Target users include network administrators, security professionals, and develop
   - `pkg/api/`: Public API definitions for external integration
   - `scripts/`: Example tengo scripts for automation
   - `docs/`: User and API documentation
-  - Configuration: `~/.config/tuimap/config.yaml` for user settings, `~/.local/share/tuimap/tuimap.db` for SQLite database
+  - Configuration: `~/.config/tuimap/config.yaml` for user settings, `~/.local/share/tuimap/tuimap.db` for bbolt database
 
 - **Configuration**: YAML-based configuration with scanner settings (interface, scan_interval, timeout, worker counts), alert rules (new_device, device_offline, port_change), NAT settings (UPnP/NAT-PMP, STUN servers), scripting limits (max_execution_time, max_memory), and TUI preferences (theme, refresh_rate, keybindings). Critical environment requirement: raw socket capabilities (CAP_NET_RAW on Linux) for ARP and ICMP scanning.
 
