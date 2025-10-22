@@ -4,7 +4,7 @@ Welcome to TuiMap! This guide will help you get started with the terminal-based 
 
 ## Prerequisites
 
-- Go 1.21 or higher (for building from source)
+- Go 1.22 or higher (for building from source)
 - Root/admin privileges (for full scanning capabilities)
 - Linux, macOS, or Windows
 
