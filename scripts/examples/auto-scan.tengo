@@ -1,0 +1,37 @@
+// Example Tengo script for TuiMap
+// This script demonstrates auto-scanning and alerting on new devices
+// 
+// Usage: tuimap script run scripts/examples/auto-scan.tengo
+//
+// NOTE: This is a placeholder for future functionality.
+// The scripting engine (Phase 4) is not yet implemented.
+
+// Scan the local network
+devices := scan("192.168.1.0/24")
+
+// Process each discovered device
+for device in devices {
+    // Alert on new devices
+    if device.FirstSeen == device.LastSeen {
+        alert("New device discovered: " + device.IP, 1)
+        
+        // Log hostname if available
+        if device.Hostname != "" {
+            log("Device hostname: " + device.Hostname)
+        }
+    }
+    
+    // Alert on devices with suspicious ports
+    suspicious_ports := [23, 135, 139, 445]
+    for port in device.Ports {
+        if port in suspicious_ports {
+            alert("Suspicious port " + string(port) + " open on " + device.IP, 2)
+        }
+    }
+}
+
+// Store scan results
+set("last_scan_time", now())
+set("last_device_count", len(devices))
+
+log("Scan complete. Found " + string(len(devices)) + " devices.")
