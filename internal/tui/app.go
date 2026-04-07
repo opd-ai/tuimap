@@ -46,6 +46,7 @@ type Model struct {
 	orchestrator *scanner.Orchestrator
 	subnet       string
 	scanning     bool
+	storage      *tracker.Storage
 }
 
 // Styles holds the lipgloss styles for the TUI.
@@ -100,6 +101,11 @@ func NewModel() Model {
 
 // NewModelWithOrchestrator creates a new TUI model with a scanner orchestrator.
 func NewModelWithOrchestrator(orch *scanner.Orchestrator, subnet string) Model {
+	return NewModelWithOrchestratorAndStorage(orch, subnet, nil)
+}
+
+// NewModelWithOrchestratorAndStorage creates a new TUI model with scanner and storage.
+func NewModelWithOrchestratorAndStorage(orch *scanner.Orchestrator, subnet string, storage *tracker.Storage) Model {
 	columns := []table.Column{
 		{Title: "IP", Width: 15},
 		{Title: "MAC", Width: 17},
@@ -136,6 +142,7 @@ func NewModelWithOrchestrator(orch *scanner.Orchestrator, subnet string) Model {
 		status:       "Ready - Press 's' to scan",
 		orchestrator: orch,
 		subnet:       subnet,
+		storage:      storage,
 	}
 }
 
@@ -419,6 +426,13 @@ func Run() error {
 // RunWithOrchestrator starts the TUI with a scanner orchestrator.
 func RunWithOrchestrator(orch *scanner.Orchestrator, subnet string) error {
 	p := tea.NewProgram(NewModelWithOrchestrator(orch, subnet), tea.WithAltScreen())
+	_, err := p.Run()
+	return err
+}
+
+// RunWithOrchestratorAndStorage starts the TUI with a scanner orchestrator and storage.
+func RunWithOrchestratorAndStorage(orch *scanner.Orchestrator, subnet string, storage *tracker.Storage) error {
+	p := tea.NewProgram(NewModelWithOrchestratorAndStorage(orch, subnet, storage), tea.WithAltScreen())
 	_, err := p.Run()
 	return err
 }
