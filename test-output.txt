@@ -1,9 +1,0 @@
-?   	github.com/opd-ai/tuimap/cmd/tuimap	[no test files]
-ok  	github.com/opd-ai/tuimap/internal/config	1.028s
-ok  	github.com/opd-ai/tuimap/internal/nat	1.421s
-ok  	github.com/opd-ai/tuimap/internal/scanner	1.537s
-ok  	github.com/opd-ai/tuimap/internal/script	1.508s
-ok  	github.com/opd-ai/tuimap/internal/tools	4.766s
-ok  	github.com/opd-ai/tuimap/internal/tracker	1.127s
-ok  	github.com/opd-ai/tuimap/internal/tui	1.054s
-ok  	github.com/opd-ai/tuimap/pkg/api	1.016s

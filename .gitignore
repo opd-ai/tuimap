@@ -46,3 +46,18 @@ dist/
 # Temporary files
 tmp/
 temp/
+
+# Analysis output files (go-stats-generator, etc.)
+baseline.json
+post.json
+pre-cleanup.json
+post-cleanup.json
+*-baseline.json
+*-post.json
+diff-report*.json
+
+# Test output artifacts
+test-output.txt
+
+# Root binary (built without bin/ target)
+/tuimap
