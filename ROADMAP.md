@@ -2,292 +2,300 @@
 
 ## Project Context
 
-### What it claims to do
-TuiMap is a terminal-based network diagnostic and mapping tool designed for real-time network analysis with emphasis on speed and accuracy in NAT environments. Key claims from README.md:
+- **What it claims to do**: TuiMap is a terminal-based network diagnostic and mapping tool built in Go, designed for real-time network analysis with emphasis on speed and accuracy in NAT environments. Key claims include:
+  - Fast Network Scanning — Discover all devices on /24 networks in under 10 seconds
+  - Real-time Device Tracking — Monitor device status changes and receive alerts
+  - Integrated Network Tools — Built-in netcat, telnet, traceroute, dig, and whois
+  - Extensible Scripting — Automate tasks with embedded Tengo scripts
+  - Modern TUI Interface — Interactive terminal UI with multiple views
+  - NAT Environment Support — Optimized for NAT environments and multi-subnet networks
 
-1. **Fast Network Scanning** — Discover all devices on /24 networks in under 10 seconds
-2. **Real-time Device Tracking** — Monitor device status changes and receive alerts
-3. **Integrated Network Tools** — Built-in netcat, telnet, traceroute, dig, and whois
-4. **Extensible Scripting** — Automate tasks with embedded Tengo scripts (d5/tengo)
-5. **Modern TUI Interface** — Interactive terminal UI with multiple views
-6. **NAT Environment Support** — Optimized for NAT environments and multi-subnet networks
+- **Target audience**: Network administrators, security professionals, and developers who need fast, reliable network discovery and diagnostic capabilities from the terminal
 
-### Target Audience
-- Network administrators
-- Security professionals
-- Developers needing fast, reliable network discovery and diagnostics from the terminal
-- Users managing home networks, enterprise environments, and cloud infrastructure
+- **Architecture**:
+  | Package | Responsibility | Files | Functions |
+  |---------|---------------|-------|-----------|
+  | `cmd/tuimap` | CLI entry point (Cobra) | 1 | 4 |
+  | `internal/scanner` | ARP/ICMP/TCP scanning, orchestration | 6 | 61 |
+  | `internal/tracker` | Device state management, alerts, storage | 3 | 27 |
+  | `internal/tools` | Network tools (netcat, telnet, traceroute, dig, whois) | 6 | 59 |
+  | `internal/script` | Tengo scripting engine, API bridge | 3 | 40 |
+  | `internal/tui` | Bubble Tea views and UI | 2 | 22 |
+  | `internal/nat` | NAT detection (UPnP, NAT-PMP, STUN) | 1 | 24 |
+  | `internal/config` | Configuration management (Viper) | 1 | 3 |
+  | `pkg/api` | Public API type definitions | 1 | 0 |
 
-### Architecture
-| Package | Role | Status |
-|---------|------|--------|
-| `cmd/tuimap` | CLI entry point with Cobra | ✅ Implemented |
-| `internal/config` | Configuration management with Viper | ✅ Implemented |
-| `internal/scanner` | Network scanning (ARP, ICMP, TCP) | ✅ Implemented |
-| `internal/tracker` | Device state management and alerts | ✅ Implemented |
-| `internal/tools` | Network diagnostic tools | ✅ Implemented |
-| `internal/script` | Tengo scripting engine | ✅ Implemented |
-| `internal/tui` | Bubble Tea terminal UI | ✅ Implemented |
-| `internal/nat` | NAT traversal and detection | ✅ Implemented |
-| `pkg/api` | Public API definitions | ✅ Implemented |
-
-### Existing CI/Quality Gates
-- **GitHub Actions CI** (`.github/workflows/ci.yml`): Build, `go vet`, tests with race detector, golangci-lint, coverage reporting
-- **Makefile targets**: `build`, `test`, `fmt`, `vet`, `lint`, `test-coverage`, `tidy`
-- **Test command**: `go test -v -race -coverprofile=coverage.out ./...`
-
----
+- **Existing CI/quality gates**:
+  - GitHub Actions CI: build, go vet, race detection tests, golangci-lint
+  - Coverage reporting with 50% warning threshold
+  - Makefile targets: build, test, vet, lint, fmt, tidy
 
 ## Goal-Achievement Summary
 
 | Stated Goal | Status | Evidence | Gap Description |
 |-------------|--------|----------|-----------------|
-| Fast Network Scanning (<10s) | ✅ Achieved | `internal/scanner/` has ARP, ICMP, TCP scanners with orchestrator; gopacket integration working | Needs benchmark validation for /24 scan time |
-| Real-time Device Tracking | ✅ Achieved | `internal/tracker/registry.go`: 236 lines, thread-safe registry with alert channel, state detection | 75% test coverage |
-| Integrated Network Tools | ✅ Achieved | `internal/tools/`: dig, netcat, telnet, traceroute, whois all implemented | 14.8% test coverage — lowest in project |
-| Extensible Scripting | ✅ Achieved | `internal/script/engine.go`: Tengo VM with API bridge, sandboxing, resource limits | 54.5% test coverage |
-| Modern TUI Interface | ✅ Achieved | `internal/tui/app.go`: 369 lines, Bubble Tea model with 4 views, keybindings | 91.4% test coverage — highest in project |
-| NAT Environment Support | ✅ Achieved | `internal/nat/nat.go`: 385 lines, UPnP/NAT-PMP/STUN client | 67.3% test coverage |
-| >80% Test Coverage | ❌ Missing | Coverage by package: config 48.8%, scanner 37.9%, tools 14.8% | Overall coverage ~52%, target is 80% |
-| CLI Default Behavior | ✅ Achieved | `cmd/tuimap/main.go`: launches TUI by default, `--no-tui` flag for headless | Fully functional |
+| Fast Network Scanning (<10s) | ✅ Achieved | `Orchestrator` with 10s timeout (`orchestrator.go:234`); benchmarks exist (`benchmark_test.go:73`); parallel ARP/ICMP/TCP execution | None — core claim validated |
+| Real-time Device Tracking | ✅ Achieved | `Registry.Update()` tracks status changes (`tracker.go:49`); `AlertEngine` generates alerts; storage persists devices | None — fully implemented |
+| Integrated Network Tools | ✅ Achieved | All 5 tools implemented: netcat (`netcat.go`), telnet (`telnet.go`), traceroute (`traceroute.go`), dig (`dig.go`), whois (`whois.go`); 84.1% test coverage | None |
+| Extensible Scripting | ✅ Achieved | `TengoEngine` with sandboxed execution (`engine.go`); full API bridge with `scan()`, `ping()`, `portScan()`, `alert()`, `get()`/`set()` (`api.go`); 81.8% test coverage | None |
+| Modern TUI Interface | ⚠️ Partial | 4 views implemented (Network Map, Device List, Tools, Scripts); scanner integrated with 's' key; storage wired up | **Tool View and Script Console are display-only** — selecting tools (1-5 keys) and entering commands not implemented |
+| NAT Environment Support | ⚠️ Partial | NAT detection works (STUN, UPnP discovery, NAT-PMP discovery); 85.1% test coverage | **Port mapping is stubbed** — `addMappingUPnP()` and `addMappingNATPMP()` return `ErrNATUnsupported` |
+| >80% Test Coverage | ⚠️ Partial | Overall: **76.0%** | Scanner at 62.2% (requires root for full coverage); target not met but close |
+| CLI Scan Command | ✅ Achieved | `tuimap scan` with `--subnet`, `--output json/text`, `--timeout` flags (`main.go:138-192`) | None |
+| Multi-Subnet Scanning | ⚠️ Partial | `MultiSubnetScanner`, `DiscoverSubnets()`, `ParseRoutingTable()` implemented | **Not exposed via CLI** — `--all-subnets` and `--from-routes` flags documented but not implemented |
 
-**Overall: 7/8 goals achieved** (all core features implemented; test coverage target not met)
-
----
+**Overall: 5/9 goals fully achieved, 4/9 partially achieved**
 
 ## Metrics Summary
 
-From `go-stats-generator` analysis:
-
 | Metric | Value | Assessment |
 |--------|-------|------------|
-| Total Lines of Code | 2,644 | Substantial implementation |
-| Total Functions | 67 | Good decomposition |
-| Total Methods | 158 | Rich API surface |
-| Total Structs | 51 | Well-typed domain model |
-| Total Interfaces | 11 | Clean abstraction boundaries |
-| Total Packages | 9 | Appropriate modularization |
-| Documentation Coverage | 64.3% | Acceptable, room for improvement |
-| Test Files | 8 packages have tests | All core packages tested |
-| Duplication Ratio | 1.03% | Excellent — minimal copy-paste |
-| Average Complexity | 4.6 | Healthy; 1 function >10 complexity |
+| Total Lines of Code | 2,721 | Modest, focused codebase |
+| Test Coverage | 76.0% | Good (target: 80%) |
+| High Complexity Functions (>10) | 2 | Low risk |
+| Duplication | <2% | Excellent |
+| Documentation Coverage | 65.3% | Acceptable |
+| go vet Warnings | 0 | Clean |
+| Race Conditions | 0 detected | Safe |
 
-### High Complexity Functions (Risk Areas)
-| Function | Package | Complexity | Lines |
-|----------|---------|------------|-------|
-| Scan | scanner | 19.2 | 76 |
-| pingWorker | scanner | 14.5 | 30 |
-| pingPrivileged | scanner | 14.0 | 62 |
-| mergeDevices | scanner | 14.0 | 39 |
-| Execute | tools | 12.7 | 87 |
+### Package Test Coverage
 
-### Test Coverage by Package
-| Package | Coverage | Assessment |
+| Package | Coverage | Gap to 80% |
 |---------|----------|------------|
-| `internal/tui` | 91.4% | ✅ Excellent |
-| `internal/tracker` | 75.0% | ⚠️ Close to target |
-| `internal/nat` | 67.3% | ⚠️ Needs improvement |
-| `internal/script` | 54.5% | ⚠️ Needs improvement |
-| `internal/config` | 48.8% | ❌ Below target |
-| `internal/scanner` | 37.9% | ❌ Well below target |
-| `internal/tools` | 14.8% | ❌ Critical gap |
+| `internal/nat` | 85.1% | ✅ Met |
+| `internal/tools` | 84.1% | ✅ Met |
+| `internal/tracker` | 83.3% | ✅ Met |
+| `internal/script` | 81.8% | ✅ Met |
+| `internal/config` | 80.5% | ✅ Met |
+| `internal/tui` | 75.0% | 5% gap |
+| `internal/scanner` | 62.2% | 17.8% gap |
+
+### Complexity Hotspots
+
+| Function | Package | Complexity | Lines | Risk |
+|----------|---------|------------|-------|------|
+| `pingWorker` | scanner | 19.7 | 50 | Medium — core ICMP logic |
+| `Scan` (ARP) | scanner | 19.2 | 76 | Medium — packet handling |
+| `mergeDevices` | scanner | 14.0 | 39 | Low — straightforward merge |
+| `Update` | tui | 12.9 | 59 | Low — standard Bubble Tea pattern |
+| `Execute` (dig) | tools | 12.7 | 87 | Low — DNS query branching |
+
+## Competitive Landscape
+
+TuiMap occupies a unique niche combining fast scanning with TUI interactivity:
+
+| Tool | Speed | TUI | Scripting | NAT Support |
+|------|-------|-----|-----------|-------------|
+| **TuiMap** | High (<10s /24) | Yes | Yes (Tengo) | Yes |
+| Nmap | Medium | No | Yes (NSE) | Limited |
+| Masscan | Very High | No | No | No |
+| RustScan | High | No | Limited | No |
+| Angry IP Scanner | High | No (GUI) | Plugins | No |
+
+TuiMap's differentiation is valid — no major competitor offers the combination of fast parallel scanning, modern TUI, embedded scripting, and NAT awareness.
 
 ---
 
 ## Roadmap
 
-### Priority 1: Increase Test Coverage to 80%
+### Priority 1: Make TUI Tool View Interactive
+**Impact**: Completes "Integrated Network Tools" claim for TUI users  
+**Effort**: 1 day
 
-**Rationale**: The project claims >80% coverage as a quality standard. Current overall coverage is ~52%. This is the only stated goal not achieved.
+The Tool View currently displays tool names but doesn't accept input. Users cannot actually run netcat, dig, etc. from the TUI despite the feature being documented.
 
-- [ ] **tools package** (14.8% → 80%): Add tests for netcat, telnet, traceroute, whois
-  - File: `internal/tools/tools_test.go`
-  - Mock network connections for reliable unit tests
-  - Estimated effort: 2 days
-
-- [ ] **scanner package** (37.9% → 80%): Add tests for ARP, ICMP, TCP scanners
-  - Files: `internal/scanner/arp_test.go`, `icmp_test.go`, `tcp_test.go`
-  - Use mock interfaces for unit tests; tag integration tests with `// +build integration`
-  - High complexity functions (`Scan`, `pingWorker`, `pingPrivileged`) need path coverage
-  - Estimated effort: 3 days
-
-- [ ] **config package** (48.8% → 80%): Test edge cases in LoadConfig, InitConfig
-  - File: `internal/config/config_test.go`
-  - Test missing file, malformed YAML, environment variable overrides
-  - Estimated effort: 1 day
-
-- [ ] **script package** (54.5% → 80%): Test API functions and error paths
-  - File: `internal/script/script_test.go`
-  - Test timeout behavior, memory limit, invalid scripts
-  - Estimated effort: 1.5 days
-
-- [ ] **nat package** (67.3% → 80%): Test STUN client and UPnP discovery
-  - File: `internal/nat/nat_test.go`
-  - Mock UDP responses for deterministic tests
-  - Estimated effort: 1 day
+- [ ] Add `selectedTool int` and `toolInput textinput.Model` fields to `Model` struct (`internal/tui/app.go`)
+- [ ] Implement key handlers for tool selection (keys 1-5) in `Update()` when `currentView == ViewToolView`
+- [ ] Add text input component for tool arguments using `charmbracelet/bubbles/textinput`
+- [ ] Wire tool execution to `tools.Execute()` methods, capture output
+- [ ] Add scrollable output area using `charmbracelet/bubbles/viewport`
 
 **Validation**:
 ```bash
-go test -coverprofile=coverage.out ./...
+sudo ./tuimap
+# Press '3' for Tools View
+# Press '1' to select netcat
+# Type 'localhost 80' and press Enter
+# Should see connection result
+```
+
+---
+
+### Priority 2: Make TUI Script Console Interactive
+**Impact**: Completes "Extensible Scripting" claim for TUI users  
+**Effort**: 1 day
+
+The Script Console shows available commands but doesn't accept input. Scripts cannot be loaded or executed from the TUI.
+
+- [ ] Add `engine *script.TengoEngine` and `consoleInput textinput.Model` fields to `Model`
+- [ ] Implement `:load <file>`, `:list`, `:stop` command parsing in `Update()`
+- [ ] Wire `:load` to `engine.LoadFile()`, `:stop` to `engine.Stop()`
+- [ ] Display script output in scrollable viewport
+- [ ] List scripts from `~/.config/tuimap/scripts/` directory
+
+**Validation**:
+```bash
+sudo ./tuimap
+# Press '4' for Script Console
+# Type ':list' — should show available scripts
+# Type ':load example.tengo' — should execute script
+```
+
+---
+
+### Priority 3: Expose Multi-Subnet Scanning via CLI
+**Impact**: Enables documented `--all-subnets` and `--from-routes` flags  
+**Effort**: 0.5 days
+
+USER_GUIDE.md documents these flags (lines 103-110) but they're not implemented in the CLI.
+
+- [ ] Add `--all-subnets` flag to `scanCmd` (`cmd/tuimap/main.go`)
+- [ ] Add `--from-routes` flag to `scanCmd`
+- [ ] Implement flag handlers that call `scanner.DiscoverSubnets()` and `scanner.ParseRoutingTable()`
+- [ ] Aggregate results from multiple subnet scans
+
+**Validation**:
+```bash
+sudo ./tuimap scan --all-subnets
+# Should discover and scan all local subnets
+
+sudo ./tuimap scan --from-routes
+# Should scan subnets from routing table
+```
+
+---
+
+### Priority 4: Improve Scanner Test Coverage (62.2% → 80%)
+**Impact**: Validates core functionality; enables safe refactoring  
+**Effort**: 2 days
+
+Scanner package has the largest coverage gap. Many functions require root for live network tests, but unit tests can cover parsing, merging, and worker logic.
+
+- [ ] Add unit tests for `mergeDevices()` with edge cases (duplicate IPs, nil MACs)
+- [ ] Add unit tests for `generateIPs()` with various CIDR ranges
+- [ ] Add unit tests for `listenForResponses()` with mock packet data
+- [ ] Add integration tests with `// +build integration` tag for live network tests
+- [ ] Mock `net.Interfaces()` and `gateway.DiscoverGateway()` for subnet detection tests
+
+**Validation**:
+```bash
+go test -coverprofile=coverage.out ./internal/scanner/...
 go tool cover -func=coverage.out | grep total
 # Must show ≥80%
 ```
 
 ---
 
-### Priority 2: Benchmark Scan Performance
+### Priority 5: Implement NAT Port Mapping (Stub → Functional)
+**Impact**: Completes "NAT Environment Support" for port forwarding use cases  
+**Effort**: 3 days
 
-**Rationale**: The <10s scan claim is the core differentiator. Implementation exists but no benchmark validation.
+Currently `AddPortMapping()` exists in the interface but always returns `ErrNATUnsupported`.
 
-- [ ] **Create benchmark tests** (`internal/scanner/benchmark_test.go`)
-  - `BenchmarkARPScan` — target <3s for /24
-  - `BenchmarkICMPScan` — target <4s for /24
-  - `BenchmarkTCPScan` — target <3s for /24 with 5 ports
-  - `BenchmarkOrchestrator` — target <10s end-to-end
+- [ ] **Option A (Full Implementation)**:
+  - Implement UPnP IGD SOAP calls in `addMappingUPnP()` using control URL from SSDP discovery
+  - Implement NAT-PMP mapping requests in `addMappingNATPMP()` per RFC 6886
+- [ ] **Option B (Remove Promise)**:
+  - Remove `AddPortMapping()` and `RemovePortMapping()` from `NATClient` interface
+  - Update documentation to clarify port mapping is not supported
 
-- [ ] **Add performance CI check**
-  - Run benchmarks weekly or on performance-critical PRs
-  - Alert if scan time exceeds 10s threshold
-
-**Validation**:
+**Validation** (if implementing):
 ```bash
-go test -bench=BenchmarkOrchestrator ./internal/scanner/... -benchtime=5x
-# Must complete in <10s average
+go test ./internal/nat/... -v -run TestAddPortMapping
+# Should create and verify actual port mapping on gateway
 ```
 
 ---
 
-### Priority 3: Reduce Code Duplication in ICMP Scanner
+### Priority 6: Migrate from google/gopacket to gopacket/gopacket
+**Impact**: Future-proofs dependency; ensures ongoing security updates  
+**Effort**: 0.5 days
 
-**Rationale**: `go-stats-generator` identified 28-line duplicated code block in `internal/scanner/icmp.go` (lines 136-163 duplicated at 202-229). Duplication increases maintenance burden.
+The original `github.com/google/gopacket` is less actively maintained. The community has forked to `github.com/gopacket/gopacket` as a drop-in replacement.
 
-- [ ] **Extract shared ping logic** to helper function
-  - Refactor `pingPrivileged` and `pingUnprivileged` to share common ICMP packet handling
-  - Target: reduce duplication from 53 lines to 0
-
-**Validation**:
-```bash
-go-stats-generator analyze . --skip-tests | grep "Duplicated Lines"
-# Should show 0 or significantly reduced
-```
-
----
-
-### Priority 4: Migrate gopacket to Active Fork
-
-**Rationale**: `github.com/google/gopacket` is no longer the primary maintained repository. The active fork is `github.com/gopacket/gopacket` (v1.5.0 released Nov 2025).
-
-- [ ] **Update import paths**
-  - Change `github.com/google/gopacket` → `github.com/gopacket/gopacket`
-  - Run `go mod tidy` to update dependencies
-
-- [ ] **Verify compatibility**
-  - Run full test suite after migration
-  - Check for API changes in v1.5.0
+- [ ] Update `go.mod`: change `github.com/google/gopacket` → `github.com/gopacket/gopacket`
+- [ ] Update import in `internal/scanner/arp.go`
+- [ ] Run `go mod tidy`
+- [ ] Verify all tests pass
 
 **Validation**:
 ```bash
 go build ./... && go test -race ./...
+# Must complete without errors
 ```
 
 ---
 
-### Priority 5: Improve Documentation Coverage
+### Priority 7: Improve TUI Test Coverage (75% → 80%)
+**Impact**: Achieves overall 80% target  
+**Effort**: 0.5 days
 
-**Rationale**: Documentation coverage is 64.3%, with type coverage at 62%. Better docs improve API discoverability for library users.
+TUI package needs 5% more coverage. Focus on view rendering and message handling.
 
-- [ ] **Add godoc to exported types** in `pkg/api/api.go`
-  - All 15 structs need field-level documentation
-  - Add package-level examples in `pkg/api/example_test.go`
-
-- [ ] **Document complex functions** in scanner package
-  - `Scan`, `pingWorker`, `mergeDevices` have complexity >10 but minimal comments
+- [ ] Add tests for `renderNetworkMap()` with empty/populated device lists
+- [ ] Add tests for `renderToolView()` and `renderScriptConsole()` output
+- [ ] Add tests for `Update()` message handling (key presses, window resize)
+- [ ] Test `scanResultMsg` handling (success and error paths)
 
 **Validation**:
 ```bash
-go-stats-generator analyze . --skip-tests | grep "Documentation"
-# Target: >80% overall coverage
+go test -coverprofile=coverage.out ./internal/tui/...
+go tool cover -func=coverage.out | grep total
+# Must show ≥80%
 ```
 
 ---
 
-### Priority 6: Refactor High-Complexity Functions
+### Priority 8: Add Performance Regression CI
+**Impact**: Protects <10s scan claim from regressions  
+**Effort**: 0.5 days
 
-**Rationale**: One function (`scanner.Scan`) has complexity 19.2, exceeding the recommended threshold of 15. High complexity correlates with bug risk.
+Benchmarks exist but aren't run in CI. Performance regressions could ship undetected.
 
-- [ ] **Refactor `scanner.Scan`** (complexity 19.2, 76 lines)
-  - Extract subnet iteration to helper
-  - Extract response handling to separate goroutine manager
-  - Target: complexity ≤10
-
-- [ ] **Refactor `tools.Execute`** (complexity 12.7, 87 lines)
-  - Split argument parsing from execution logic
-  - Target: complexity ≤10, length ≤50
+- [ ] Add GitHub Actions workflow step to run benchmarks weekly (scheduled)
+- [ ] Store benchmark results as artifacts
+- [ ] Add benchmark comparison script to detect regressions >10%
+- [ ] Fail CI if `BenchmarkOrchestratorFullScan` exceeds 10s threshold
 
 **Validation**:
 ```bash
-go-stats-generator analyze . --skip-tests | grep -A5 "High Complexity"
-# No functions >15 complexity
+go test -bench=BenchmarkOrchestrator ./internal/scanner/... -benchtime=3x
+# Average time must be <10s
 ```
 
 ---
 
-### Priority 7: Address Naming Convention Violations
+## Dependency Graph
 
-**Rationale**: 8 naming violations detected. While minor, fixing them improves Go idiomaticity.
+```
+Priority 1 (Tool View) ─────────────────┐
+Priority 2 (Script Console) ────────────┼─> TUI feature-complete
+                                        │
+Priority 3 (Multi-Subnet CLI) ──────────┴─> CLI feature-complete
 
-- [ ] **Rename NAT types** to avoid package stutter
-  - `nat.NATInfo` → `nat.Info`
-  - `nat.NATType` → `nat.Type`
-  - `nat.NATClient` → `nat.Client` (already exists as concrete type)
+Priority 4 (Scanner Tests) ─────────────┬─> Safe to refactor
+Priority 6 (gopacket Migration) ────────┴─> Dependency updated
 
-- [ ] **Rename single-letter variables** in `internal/tui/app.go`
-  - `b` at lines 178, 231, 270, 284 → more descriptive names (`builder`, `buf`)
+Priority 5 (NAT Port Mapping) ──────────── NAT feature-complete
 
-**Validation**:
-```bash
-go-stats-generator analyze . --skip-tests | grep "Identifier Violations"
-# Should show 0 violations
+Priority 7 (TUI Tests) ─────────────────┬─> 80% coverage achieved
+Priority 8 (Benchmark CI) ──────────────┴─> Performance protected
 ```
 
----
+## Effort Summary
 
-## Implementation Order Rationale
-
-1. **Test coverage first** — Only unmet stated goal; provides safety net for subsequent refactoring
-2. **Benchmarks second** — Validates core value proposition without code changes
-3. **Duplication removal** — Quick win with high ROI (28.00 score from analyzer)
-4. **Dependency migration** — Security/maintenance benefit; low risk
-5. **Documentation** — Improves library usability; no runtime impact
-6. **Complexity refactoring** — Improves maintainability; higher risk, do after test coverage
-7. **Naming conventions** — Cosmetic; lowest priority
-
----
-
-## Risk Assessment
-
-| Risk | Mitigation |
-|------|------------|
-| Test coverage effort exceeds estimate | Prioritize tools package (largest gap), accept 70% as interim target |
-| Benchmark shows >10s scan time | Profile with pprof, optimize hot paths, consider early-exit optimization |
-| gopacket migration breaks ARP scanner | Pin to specific version, test on multiple platforms |
-| Refactoring introduces regressions | Only refactor after achieving 80% coverage |
+| Priority | Description | Effort | Impact |
+|----------|-------------|--------|--------|
+| P1 | Tool View Interactive | 1 day | High — completes TUI claim |
+| P2 | Script Console Interactive | 1 day | High — completes TUI claim |
+| P3 | Multi-Subnet CLI Flags | 0.5 days | Medium — documented feature |
+| P4 | Scanner Test Coverage | 2 days | High — core reliability |
+| P5 | NAT Port Mapping | 3 days | Medium — advanced feature |
+| P6 | gopacket Migration | 0.5 days | Low — maintenance |
+| P7 | TUI Test Coverage | 0.5 days | Medium — quality gate |
+| P8 | Benchmark CI | 0.5 days | Medium — regression prevention |
+| **Total** | | **~9 days** | |
 
 ---
 
-## Estimated Total Effort
-
-| Priority | Estimated Duration |
-|----------|-------------------|
-| P1: Test Coverage | 8.5 days |
-| P2: Benchmarks | 1 day |
-| P3: Duplication | 0.5 days |
-| P4: gopacket migration | 0.5 days |
-| P5: Documentation | 1 day |
-| P6: Refactoring | 2 days |
-| P7: Naming | 0.5 days |
-| **Total** | **~14 days** |
-
----
-
-*Assessment generated 2026-04-07 using go-stats-generator metrics and manual code review*
+*Assessment generated 2026-04-07 using go-stats-generator v1.0.0 metrics, test results, and goal analysis*
