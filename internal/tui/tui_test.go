@@ -607,7 +607,7 @@ func TestExecuteSelectedToolInvalidArgs(t *testing.T) {
 	m.width = 80
 	m.height = 24
 	m.currentView = ViewToolView
-	m.selectedTool = 0 // netcat
+	m.selectedTool = 0       // netcat
 	m.toolInput.SetValue("") // Empty args - should fail validation
 
 	newModel, cmd := m.executeSelectedTool()

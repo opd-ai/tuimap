@@ -1,0 +1,63 @@
+name: Performance Benchmarks
+
+on:
+  schedule:
+    # Run weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'internal/scanner/**'
+      - 'internal/tracker/**'
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Install libpcap
+        run: sudo apt-get update && sudo apt-get install -y libpcap-dev
+
+      - name: Run scanner benchmarks
+        run: |
+          echo "Running scanner benchmarks..."
+          go test -bench=BenchmarkOrchestrator -benchtime=3x ./internal/scanner/... 2>&1 | tee benchmark_output.txt
+          
+      - name: Check scan time threshold
+        run: |
+          # Extract the benchmark time (in ns/op)
+          BENCHMARK_LINE=$(grep "BenchmarkOrchestratorFullScan" benchmark_output.txt || echo "")
+          if [ -n "$BENCHMARK_LINE" ]; then
+            # Parse ns/op value
+            NS_PER_OP=$(echo "$BENCHMARK_LINE" | awk '{for(i=1;i<=NF;i++) if($i ~ /ns\/op/) print $(i-1)}')
+            if [ -n "$NS_PER_OP" ]; then
+              # Convert to seconds (ns/1000000000)
+              SECONDS=$(echo "scale=2; $NS_PER_OP / 1000000000" | bc)
+              echo "Benchmark time: ${SECONDS}s"
+              
+              # Check if exceeds 10s threshold
+              if (( $(echo "$SECONDS > 10" | bc -l) )); then
+                echo "::error::Performance regression detected! Scan time ${SECONDS}s exceeds 10s threshold"
+                exit 1
+              else
+                echo "::notice::Scan time ${SECONDS}s is within 10s threshold"
+              fi
+            else
+              echo "::warning::Could not parse benchmark results"
+            fi
+          else
+            echo "::warning::BenchmarkOrchestratorFullScan not found in output"
+          fi
+          
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark_output.txt
+          retention-days: 30

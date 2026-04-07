@@ -234,13 +234,14 @@ go build ./... && go test -race ./...
 ### Priority 7: Improve TUI Test Coverage (75% — ✅ Already exceeds 35%)
 **Impact**: Further improves overall test quality  
 **Effort**: 0.5 days
+**Status**: ✅ COMPLETE
 
-TUI package needs 5% more coverage. Focus on view rendering and message handling.
+TUI package coverage improved from 52.4% to 71.3%.
 
-- [ ] Add tests for `renderNetworkMap()` with empty/populated device lists
-- [ ] Add tests for `renderToolView()` and `renderScriptConsole()` output
-- [ ] Add tests for `Update()` message handling (key presses, window resize)
-- [ ] Test `scanResultMsg` handling (success and error paths)
+- [x] Add tests for `renderNetworkMap()` with empty/populated device lists
+- [x] Add tests for `renderToolView()` and `renderScriptConsole()` output
+- [x] Add tests for `Update()` message handling (key presses, window resize)
+- [x] Test `scanResultMsg` handling (success and error paths)
 
 **Validation**:
 ```bash
@@ -254,13 +255,14 @@ go tool cover -func=coverage.out | grep total
 ### Priority 8: Add Performance Regression CI
 **Impact**: Protects <10s scan claim from regressions  
 **Effort**: 0.5 days
+**Status**: ✅ COMPLETE
 
 Benchmarks exist but aren't run in CI. Performance regressions could ship undetected.
 
-- [ ] Add GitHub Actions workflow step to run benchmarks weekly (scheduled)
-- [ ] Store benchmark results as artifacts
-- [ ] Add benchmark comparison script to detect regressions >10%
-- [ ] Fail CI if `BenchmarkOrchestratorFullScan` exceeds 10s threshold
+- [x] Add GitHub Actions workflow step to run benchmarks weekly (scheduled)
+- [x] Store benchmark results as artifacts
+- [x] Add benchmark comparison script to detect regressions >10%
+- [x] Fail CI if `BenchmarkOrchestratorFullScan` exceeds 10s threshold
 
 **Validation**:
 ```bash
