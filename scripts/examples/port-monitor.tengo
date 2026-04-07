@@ -1,0 +1,50 @@
+// TuiMap Example: Port Monitor
+// Alerts when specific ports are detected on unexpected devices
+//
+// Usage: tuimap script run scripts/examples/port-monitor.tengo
+
+// Define expected ports per device
+expected := {
+    "192.168.1.1": [80, 443],           // Router
+    "192.168.1.10": [22, 80, 443],      // Web server
+    "192.168.1.20": [22, 3306]          // Database server
+}
+
+// Critical ports that should be monitored
+critical_ports := [22, 23, 3389, 5900, 445, 139]
+
+// Get all tracked devices
+devices := get_devices()
+
+for device in devices {
+    ip := device.ip
+    
+    // Check if device has expected ports defined
+    if ip in expected {
+        // Check for unexpected open ports
+        for port in device.ports {
+            if !(port in expected[ip]) {
+                alert("port_change", "Unexpected port " + string(port) + " on " + ip)
+            }
+        }
+        
+        // Check for missing expected ports
+        for port in expected[ip] {
+            if !(port in device.ports) {
+                alert("port_change", "Expected port " + string(port) + " closed on " + ip)
+            }
+        }
+    } else {
+        // Unknown device - check for critical ports
+        for port in device.ports {
+            if port in critical_ports {
+                alert("new_device", 
+                      "Unknown device " + ip + " has critical port " + string(port))
+            }
+        }
+    }
+}
+
+// Log completion
+fmt.println("Port monitoring check complete")
+fmt.println("Checked", len(devices), "devices")

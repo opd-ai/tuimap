@@ -1,0 +1,68 @@
+// TuiMap Example: New Device Watcher
+// Alerts on any new devices and logs their details
+//
+// Usage: tuimap script run scripts/examples/new-device-watcher.tengo
+
+// Get devices
+devices := get_devices()
+
+// Track new devices
+new_devices := []
+
+for device in devices {
+    if device.status == "new" {
+        new_devices = append(new_devices, device)
+    }
+}
+
+// Report new devices
+if len(new_devices) > 0 {
+    fmt.println("=== New Devices Detected ===")
+    fmt.println()
+    
+    for device in new_devices {
+        fmt.println("IP Address:", device.ip)
+        
+        if device.mac != undefined && device.mac != "" {
+            fmt.println("MAC Address:", device.mac)
+        }
+        
+        if device.hostname != "" {
+            fmt.println("Hostname:", device.hostname)
+        }
+        
+        if device.vendor != "" {
+            fmt.println("Vendor:", device.vendor)
+        }
+        
+        if len(device.ports) > 0 {
+            fmt.print("Open Ports:")
+            for port in device.ports {
+                fmt.print(" ", port)
+            }
+            fmt.println()
+        }
+        
+        fmt.println("First Seen:", device.first_seen)
+        fmt.println()
+        
+        // Generate alert
+        msg := "New device: " + device.ip
+        if device.hostname != "" {
+            msg += " (" + device.hostname + ")"
+        }
+        alert("new_device", msg)
+    }
+    
+    // Store last new device count
+    prev_new := get("new_device_count")
+    if prev_new == undefined {
+        prev_new = 0
+    }
+    set("new_device_count", prev_new + len(new_devices))
+    
+    fmt.println("Total new devices in this scan:", len(new_devices))
+    fmt.println("Total new devices tracked:", prev_new + len(new_devices))
+} else {
+    fmt.println("No new devices detected")
+}

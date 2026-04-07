@@ -83,7 +83,7 @@ The <10s scanning requirement is the project's primary differentiator. Without i
 
 **Implementation Steps:**
 
-- [ ] **ARP Scanner** (`internal/scanner/arp.go`)
+- [x] **ARP Scanner** (`internal/scanner/arp.go`)
   - Implement raw socket ARP requests with gopacket
   - Worker pool pattern (256 concurrent workers as per PLAN.md)
   - Subnet detection and CIDR calculation
@@ -91,28 +91,28 @@ The <10s scanning requirement is the project's primary differentiator. Without i
   - Target: <3s for /24 network
   - Reference: PLAN.md Section 3.2.1
 
-- [ ] **ICMP Scanner** (`internal/scanner/icmp.go`)
+- [x] **ICMP Scanner** (`internal/scanner/icmp.go`)
   - Use `golang.org/x/net/icmp` for ping sweep
   - 256 concurrent workers with 1s timeout per host
   - Graceful fallback when raw sockets unavailable
   - Target: <4s for /24 network
   - Reference: PLAN.md Section 3.2.2
 
-- [ ] **TCP Port Scanner** (`internal/scanner/tcp.go`)
+- [x] **TCP Port Scanner** (`internal/scanner/tcp.go`)
   - TCP SYN scan on configurable ports (default: 22, 80, 443, 3389, 5900)
   - 512 concurrent workers, 500ms timeout per connection
   - Service/banner detection
   - Target: <3s for /24 network with 5 ports
   - Reference: PLAN.md Section 3.2.3
 
-- [ ] **Multi-method Orchestrator** (`internal/scanner/orchestrator.go`)
+- [x] **Multi-method Orchestrator** (`internal/scanner/orchestrator.go`)
   - Run all scan methods in parallel with `context.WithTimeout(10s)`
   - Hash-based device deduplication
   - Result aggregation and merging
   - Early exit when 99% confidence achieved
   - Reference: PLAN.md Section 3.6.1
 
-- [ ] **Add dependencies to go.mod**
+- [x] **Add dependencies to go.mod**
   - `github.com/google/gopacket` for packet capture
   - `golang.org/x/net/icmp` for ICMP
   - `github.com/jackpal/gateway` for gateway detection
@@ -130,22 +130,22 @@ go test -bench=BenchmarkScan ./internal/scanner/... -benchtime=5x
 
 Real-time device tracking is the second core feature enabling monitoring use cases.
 
-- [ ] **In-memory Device Registry** (`internal/tracker/registry.go`)
+- [x] **In-memory Device Registry** (`internal/tracker/registry.go`)
   - Thread-safe map with `sync.RWMutex`
   - Device struct: IP, MAC, Hostname, Vendor, Ports, LastSeen, FirstSeen, Status
   - LRU eviction for memory efficiency
 
-- [ ] **State Change Detection** (`internal/tracker/state.go`)
+- [x] **State Change Detection** (`internal/tracker/registry.go`)
   - Detect: new device, online, offline, changed (ports/MAC)
   - Event channels for subscribers
   - Configurable offline threshold
 
-- [ ] **Alert Engine** (`internal/tracker/alerts.go`)
+- [x] **Alert Engine** (`internal/tracker/registry.go`)
   - Rule-based alerts matching config.AlertsConfig
   - <500ms latency requirement
   - Alert types: new_device, device_offline, port_change, mac_conflict
 
-- [ ] **Persistence Layer** (`internal/tracker/storage.go`)
+- [x] **Persistence Layer** (`internal/tracker/storage.go`)
   - Add `go.etcd.io/bbolt` to go.mod
   - Implement schema from PLAN.md Section 3.3.1
   - History tracking with configurable retention
@@ -162,31 +162,31 @@ go test -race ./internal/tracker/...
 
 The TUI is essential for the "interactive terminal UI" claim and user experience.
 
-- [ ] **Add Bubble Tea dependencies**
+- [x] **Add Bubble Tea dependencies**
   - `github.com/charmbracelet/bubbletea`
   - `github.com/charmbracelet/lipgloss`
 
-- [ ] **Core TUI Framework** (`internal/tui/app.go`)
+- [x] **Core TUI Framework** (`internal/tui/app.go`)
   - Bubble Tea Model-Update-View pattern
   - View switching logic (keys 1-4)
   - Global keybindings (q=quit, s=scan, r=refresh)
 
-- [ ] **Network Map View** (`internal/tui/views/network_map.go`)
+- [x] **Network Map View** (`internal/tui/app.go`)
   - Visual topology with gateway relationships
   - Real-time status indicators (online/offline)
   - Device selection and navigation
 
-- [ ] **Device List View** (`internal/tui/views/device_list.go`)
+- [x] **Device List View** (`internal/tui/app.go`)
   - Sortable table (IP, MAC, Hostname, Vendor, Status, Last Seen)
   - Filter/search with 'f' key
   - Detail pane on selection
 
-- [ ] **Tool View** (`internal/tui/views/tool_view.go`)
+- [x] **Tool View** (`internal/tui/app.go`)
   - Tab interface for each tool
   - Input area and scrollable output
   - Command history
 
-- [ ] **Script Console** (`internal/tui/views/script_console.go`)
+- [x] **Script Console** (`internal/tui/app.go`)
   - Script file loader
   - Execution controls and output display
 
@@ -202,28 +202,28 @@ The TUI is essential for the "interactive terminal UI" claim and user experience
 
 Five integrated tools are explicitly promised in the README.
 
-- [ ] **Tool Framework** (`internal/tools/base.go`)
+- [x] **Tool Framework** (`internal/tools/tools.go`)
   - Common interface implementation
   - Context cancellation support
   - Output streaming via channels
 
-- [ ] **Netcat** (`internal/tools/netcat.go`)
+- [x] **Netcat** (`internal/tools/netcat.go`)
   - TCP/UDP client mode
   - Optional listen mode
 
-- [ ] **Telnet** (`internal/tools/telnet.go`)
+- [x] **Telnet** (`internal/tools/telnet.go`)
   - Telnet protocol with WILL/WONT/DO/DONT negotiation
   - Banner grabbing
 
-- [ ] **Traceroute** (`internal/tools/traceroute.go`)
+- [x] **Traceroute** (`internal/tools/traceroute.go`)
   - ICMP or UDP-based
   - Hop timing display
 
-- [ ] **Dig** (`internal/tools/dig.go`)
+- [x] **Dig** (`internal/tools/dig.go`)
   - DNS queries (A, AAAA, MX, TXT, NS, CNAME)
   - Custom resolver support
 
-- [ ] **Whois** (`internal/tools/whois.go`)
+- [x] **Whois** (`internal/tools/whois.go`)
   - WHOIS protocol client
   - Domain and IP lookups
 
@@ -239,21 +239,21 @@ go test ./internal/tools/... -tags=integration
 
 Extensible scripting is a key differentiator from nmap/similar tools.
 
-- [ ] **Add Tengo dependency**
+- [x] **Add Tengo dependency**
   - `github.com/d5/tengo/v2`
 
-- [ ] **Tengo VM Integration** (`internal/script/engine.go`)
+- [x] **Tengo VM Integration** (`internal/script/engine.go`)
   - VM initialization with resource limits (30s execution, 50MB memory)
   - Script loading from file and string
   - Hot reload support
 
-- [ ] **API Bridge** (`internal/script/api.go`)
+- [x] **API Bridge** (`internal/script/api.go`)
   - Expose scan(), ping(), portScan(), resolve()
   - Expose alert(), getDevices(), getDevice()
   - Expose set(), get(), delete() for persistent storage
   - Reference: PLAN.md Section 3.5
 
-- [ ] **Sandboxing** (`internal/script/sandbox.go`)
+- [x] **Sandboxing** (`internal/script/engine.go`)
   - No direct file system access
   - No command execution
   - Whitelist of allowed operations
@@ -270,19 +270,19 @@ go test ./internal/script/... -run TestExampleScript
 
 NAT optimization is explicitly claimed and differentiates from basic scanners.
 
-- [ ] **Gateway Detection** (`internal/scanner/gateway.go`)
+- [x] **Gateway Detection** (`internal/scanner/orchestrator.go`)
   - Use `github.com/jackpal/gateway` for default gateway
   - Parse routing tables for multi-homed systems
 
-- [ ] **UPnP/NAT-PMP Integration** (`internal/nat/upnp.go`)
+- [x] **UPnP/NAT-PMP Integration** (`internal/nat/nat.go`)
   - Discover router capabilities
   - Query external IP address
 
-- [ ] **STUN Client** (`internal/nat/stun.go`)
+- [x] **STUN Client** (`internal/nat/nat.go`)
   - Public IP discovery via STUN servers
   - NAT type detection
 
-- [ ] **Multi-subnet Support** (`internal/scanner/multisubnet.go`)
+- [x] **Multi-subnet Support** (`internal/scanner/multisubnet.go`)
   - Route table parsing
   - Cross-subnet discovery strategies
 
@@ -292,21 +292,21 @@ NAT optimization is explicitly claimed and differentiates from basic scanners.
 
 >80% test coverage is explicitly required in PLAN.md Section 4.5.
 
-- [ ] **Unit Tests**
+- [x] **Unit Tests**
   - `internal/config/config_test.go` - config loading/saving
   - `internal/scanner/*_test.go` - mock network interfaces
   - `internal/tracker/*_test.go` - state management
   - `internal/tools/*_test.go` - tool execution
 
-- [ ] **Integration Tests** (build tag: `// +build integration`)
+- [x] **Integration Tests** (build tag: `// +build integration`)
   - End-to-end scan workflows
   - Real network interface tests
 
-- [ ] **Benchmark Tests**
+- [x] **Benchmark Tests**
   - `BenchmarkARPScan`, `BenchmarkICMPScan`, `BenchmarkTCPScan`
   - Must validate <10s requirement
 
-- [ ] **CI Pipeline** (`.github/workflows/ci.yml`)
+- [x] **CI Pipeline** (`.github/workflows/ci.yml`)
   - Run tests on push/PR
   - golangci-lint
   - Coverage reporting

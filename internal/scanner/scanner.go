@@ -55,8 +55,3 @@ type Scanner interface {
 	// Name returns the scanner name
 	Name() string
 }
-
-// TODO: Implement ARP scanner
-// TODO: Implement ICMP scanner
-// TODO: Implement TCP port scanner
-// TODO: Implement passive discovery

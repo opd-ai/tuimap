@@ -51,15 +51,22 @@ This creates `~/.config/tuimap/config.yaml` with sensible defaults.
 tuimap config show
 ```
 
-### 3. Edit Configuration (Optional)
+### 3. Run TuiMap
 
-Edit `~/.config/tuimap/config.yaml` to customize:
-- Scanning methods and timeouts
-- Alert rules
-- Network interface
-- TUI preferences
+```bash
+# Run with default settings (requires root for full capabilities)
+sudo tuimap
 
-## Understanding Configuration
+# Run with specific interface
+sudo tuimap --interface eth0
+
+# Run in debug mode
+sudo tuimap --debug
+```
+
+## Configuration
+
+The configuration file is located at `~/.config/tuimap/config.yaml`.
 
 ### Scanner Settings
 
@@ -69,9 +76,21 @@ scanner:
   scan_interval: 60s      # Background scan frequency
   timeout: 10s            # Total scan timeout
   methods:                # Scanning methods to use
-    - arp                 # Fastest, local subnet only
-    - icmp                # Cross-subnet capability
-    - tcp                 # Most reliable through firewalls
+    - arp                 # Fastest, local subnet only (requires root)
+    - icmp                # Cross-subnet capability (requires root)
+    - tcp                 # Works without root
+  arp:
+    workers: 256          # Concurrent workers for ARP
+    timeout: 100ms        # Per-host timeout
+    retries: 2            # Retry count
+  icmp:
+    workers: 256          # Concurrent workers for ICMP
+    timeout: 1s           # Per-host timeout
+    count: 1              # Pings per host
+  tcp:
+    workers: 512          # Concurrent workers for TCP
+    timeout: 500ms        # Per-connection timeout
+    ports: [22, 80, 443, 3389, 5900]  # Ports to scan
 ```
 
 ### Alert Rules
@@ -80,12 +99,18 @@ scanner:
 alerts:
   enabled: true
   rules:
-    - type: new_device
-      severity: 1
-      action: notify
-    - type: device_offline
+    - type: new_device     # Alert on new devices
       severity: 2
+      action: notify
+    - type: device_offline # Alert when devices go offline
+      severity: 1
       action: log
+    - type: port_change    # Alert on port changes
+      severity: 2
+      action: notify
+    - type: mac_conflict   # Alert on MAC conflicts
+      severity: 3
+      action: notify
 ```
 
 ### NAT Settings
@@ -94,77 +119,163 @@ alerts:
 nat:
   detect: true            # Detect NAT environment
   upnp_enabled: true      # Use UPnP for gateway info
-  public_ip_check: true   # Check public IP
+  nat_pmp_enabled: true   # Use NAT-PMP
+  public_ip_check: true   # Check public IP via STUN
+  stun_servers:
+    - stun.l.google.com:19302
+    - stun1.l.google.com:19302
 ```
 
-## Current Status
+### TUI Settings
 
-**Phase 0: Project Setup** ✅ **COMPLETE**
+```yaml
+tui:
+  refresh_rate: 30        # FPS for UI updates
+  theme: default          # Color theme
+  keybindings:
+    quit: q
+    scan: s
+    refresh: r
+    filter: f
+    help: "?"
+    view_map: "1"
+    view_list: "2"
+    view_tools: "3"
+    view_scripts: "4"
+```
 
-The TuiMap project is currently in Phase 0, which means:
-- ✅ Project structure is established
-- ✅ CLI framework is working
-- ✅ Configuration management is functional
-- ⏳ Network scanning is **not yet implemented** (Phase 1)
-- ⏳ Device tracking is **not yet implemented** (Phase 2)
-- ⏳ Network tools are **not yet implemented** (Phase 3)
-- ⏳ Scripting engine is **not yet implemented** (Phase 4)
-- ⏳ TUI interface is **not yet implemented** (Phase 5)
+### Scripting Settings
 
-## What Works Now
+```yaml
+scripting:
+  enabled: true
+  max_execution_time: 30s # Maximum script runtime
+  max_memory: 52428800    # 50MB memory limit
+  scripts_dir: ~/.config/tuimap/scripts
+```
 
-Currently, you can:
-- ✅ Run `tuimap --help` to see available commands
-- ✅ Run `tuimap version` to check version info
-- ✅ Run `tuimap config init` to create configuration
-- ✅ Run `tuimap config show` to view configuration
+## TUI Navigation
 
-## What's Coming Next
+Once TuiMap is running, use these keyboard shortcuts:
 
-**Phase 1: Core Network Scanner** (Weeks 2-3)
-- ARP scanning for local devices
-- ICMP ping sweep for cross-subnet discovery
-- TCP port scanning for service detection
-- Multi-method parallel scanning (<10s target)
+| Key | Action |
+|-----|--------|
+| `1` | Network Map View |
+| `2` | Device List View |
+| `3` | Network Tools View |
+| `4` | Script Console View |
+| `s` | Start Network Scan |
+| `r` | Refresh Display |
+| `f` | Filter Devices |
+| `?` | Show Help |
+| `q` | Quit |
 
-**Phase 2: Device Tracking** (Week 4)
-- Real-time device status tracking
-- Alert engine for new devices and changes
-- Persistent device history
+## Network Tools
 
-**Phase 3: Network Tools** (Weeks 5-6)
-- Integrated netcat, telnet, traceroute, dig, whois
+TuiMap includes integrated network diagnostic tools:
 
-**Phase 4: Scripting Engine** (Week 7)
-- d5/tengo embedded scripting
-- Automation capabilities
+### Netcat
+TCP/UDP connection testing:
+```
+nc <host> <port> [--udp] [--data <text>]
+```
 
-**Phase 5: TUI Interface** (Weeks 8-9)
-- Interactive terminal UI with multiple views
-- Network map visualization
-- Device list and details
+### Telnet
+Protocol testing and banner grabbing:
+```
+telnet <host> [port]
+```
 
-See [PLAN.md](../PLAN.md) for the complete roadmap.
+### Traceroute
+Path discovery with hop timing:
+```
+traceroute <host> [--max-hops <n>]
+```
 
-## Development Roadmap
+### Dig
+DNS query interface:
+```
+dig <domain> [type] [@server]
+```
+Types: A, AAAA, MX, TXT, NS, CNAME
 
-For detailed implementation plans and progress tracking, see:
-- [PLAN.md](../PLAN.md) - Complete implementation plan
-- [README.md](../README.md) - Project overview
+### Whois
+Domain/IP registration lookup:
+```
+whois <domain|ip> [--server <server>]
+```
 
-## Need Help?
+## Scripting
 
-- Check the [PLAN.md](../PLAN.md) for architecture details
-- Review configuration in `~/.config/tuimap/config.yaml`
-- Run `tuimap --help` for command reference
+TuiMap supports automation via Tengo scripts. Scripts are located in `~/.config/tuimap/scripts/`.
 
-## Contributing
+### Available Script APIs
 
-We welcome contributions! The project is in early stages, so there's plenty of opportunity to get involved:
+**Network Operations:**
+- `scan()` - Run network scan
+- `ping(host)` - Ping a host
+- `port_scan(host, ports)` - Scan specific ports
+- `resolve(hostname)` - DNS resolution
 
-1. Review the [PLAN.md](../PLAN.md) to understand the architecture
-2. Pick a phase or component to work on
-3. Submit a pull request
+**Device Management:**
+- `get_devices()` - Get all tracked devices
+- `get_device(ip)` - Get specific device
+- `alert(type, message)` - Generate alert
+
+**Storage:**
+- `set(key, value)` - Store persistent value
+- `get(key)` - Retrieve value
+- `delete(key)` - Remove value
+
+### Example Script
+
+```tengo
+// alert_on_new_ssh.tengo
+// Alert when a new device with SSH port is found
+
+devices := get_devices()
+for device in devices {
+    if 22 in device.ports && device.status == "new" {
+        alert("new_device", "New SSH server: " + device.ip)
+    }
+}
+```
+
+## Permissions
+
+TuiMap requires different permission levels for different features:
+
+| Feature | Permission | Reason |
+|---------|------------|--------|
+| ARP Scanning | Root/Admin | Raw socket access |
+| ICMP Scanning | Root/Admin | Raw socket access |
+| TCP Scanning | User | Standard TCP connections |
+| Network Tools | Varies | Some need elevated privileges |
+| TUI Interface | User | No special permissions |
+
+When run without root, TuiMap gracefully falls back to unprivileged methods (TCP scanning only).
+
+## Troubleshooting
+
+### "Permission denied" errors
+Run with `sudo` or grant `CAP_NET_RAW` capability:
+```bash
+sudo setcap cap_net_raw+ep /usr/local/bin/tuimap
+```
+
+### Scans taking too long
+- Reduce worker counts in configuration
+- Use TCP-only scanning (fastest without root)
+- Scan smaller subnets
+
+### No devices found
+- Verify network interface is correct
+- Check firewall settings
+- Try running with `--debug` flag
+
+### Configuration issues
+- Run `tuimap config show` to verify settings
+- Reset with `tuimap config init --force`
 
 ## License
 

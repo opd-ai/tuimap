@@ -5,7 +5,9 @@ import (
 	"os"
 
 	"github.com/opd-ai/tuimap/internal/config"
+	"github.com/opd-ai/tuimap/internal/tui"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -13,6 +15,9 @@ var (
 	version = "0.1.0-dev"
 	commit  = "none"
 	date    = "unknown"
+
+	// Flags
+	noTUI bool
 )
 
 var rootCmd = &cobra.Command{
@@ -29,8 +34,17 @@ Features:
   - Extensible scripting engine (d5/tengo)
   - Modern TUI interface with multiple views`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Default action: show help
-		cmd.Help()
+		if noTUI {
+			// Headless mode - show help for now
+			cmd.Help()
+			return
+		}
+
+		// Start the TUI
+		if err := tui.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error running TUI: %v\n", err)
+			os.Exit(1)
+		}
 	},
 }
 
@@ -70,8 +84,15 @@ var configShowCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("Configuration loaded from: %s\n", cfg.ConfigPath)
-		// TODO: Pretty print configuration
+		fmt.Printf("# Configuration loaded from: %s\n\n", cfg.ConfigPath)
+
+		// Pretty print configuration as YAML
+		output, err := yaml.Marshal(cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error formatting config: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(string(output))
 	},
 }
 
@@ -87,6 +108,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default is $HOME/.config/tuimap/config.yaml)")
 	rootCmd.PersistentFlags().BoolP("debug", "d", false, "enable debug mode")
 	rootCmd.PersistentFlags().StringP("interface", "i", "", "network interface to use")
+	rootCmd.Flags().BoolVar(&noTUI, "no-tui", false, "run in headless mode without TUI")
 }
 
 func main() {

@@ -17,9 +17,3 @@ type NetworkTool interface {
 	// Validate validates the arguments
 	Validate(args []string) error
 }
-
-// TODO: Implement NetcatTool
-// TODO: Implement TelnetTool
-// TODO: Implement TracerouteTool
-// TODO: Implement DigTool
-// TODO: Implement WhoisTool

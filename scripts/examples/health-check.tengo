@@ -1,0 +1,93 @@
+// TuiMap Example: Network Health Check
+// Performs basic network health diagnostics
+//
+// Usage: tuimap script run scripts/examples/health-check.tengo
+
+fmt.println("=== Network Health Check ===")
+fmt.println()
+
+// Run a scan first
+fmt.println("Running network scan...")
+result := scan()
+
+devices := result.devices
+scan_time := result.scan_time
+
+fmt.println("Scan completed in", scan_time)
+fmt.println()
+
+// Basic metrics
+total := len(devices)
+online := 0
+offline := 0
+with_hostname := 0
+with_ports := 0
+
+for device in devices {
+    if device.status == "online" {
+        online++
+    } else if device.status == "offline" {
+        offline++
+    }
+    
+    if device.hostname != "" {
+        with_hostname++
+    }
+    
+    if len(device.ports) > 0 {
+        with_ports++
+    }
+}
+
+// Display metrics
+fmt.println("=== Network Statistics ===")
+fmt.println("Total devices:", total)
+fmt.println("Online devices:", online)
+fmt.println("Offline devices:", offline)
+fmt.println("Devices with hostname:", with_hostname)
+fmt.println("Devices with open ports:", with_ports)
+fmt.println()
+
+// Health assessment
+fmt.println("=== Health Assessment ===")
+
+health_score := 100
+
+// Check online ratio
+if total > 0 {
+    online_ratio := (online * 100) / total
+    fmt.println("Online ratio:", online_ratio, "%")
+    
+    if online_ratio < 50 {
+        fmt.println("WARNING: Less than 50% of devices are online")
+        health_score -= 20
+    }
+}
+
+// Check hostname resolution
+if total > 0 {
+    hostname_ratio := (with_hostname * 100) / total
+    fmt.println("Hostname resolution:", hostname_ratio, "%")
+    
+    if hostname_ratio < 30 {
+        fmt.println("NOTE: Low hostname resolution rate")
+        health_score -= 10
+    }
+}
+
+// Check scan time
+if scan_time > 10000 {  // 10 seconds
+    fmt.println("WARNING: Scan time exceeds 10 second target")
+    health_score -= 10
+} else {
+    fmt.println("Scan time: OK (under 10s target)")
+}
+
+fmt.println()
+fmt.println("=== Overall Health Score:", health_score, "/ 100 ===")
+
+// Store results
+set("last_health_check", time.now())
+set("last_health_score", health_score)
+set("last_device_total", total)
+set("last_device_online", online)

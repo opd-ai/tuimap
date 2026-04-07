@@ -2,8 +2,6 @@
 
 This directory contains example Tengo scripts demonstrating TuiMap's scripting capabilities.
 
-**Note:** The scripting engine is planned for Phase 4 and is not yet implemented.
-
 ## Available Examples
 
 ### auto-scan.tengo
@@ -12,39 +10,105 @@ Automatic network scanning with alerting on:
 - Suspicious open ports
 - Device status changes
 
-## Future Scripting Capabilities
+### port-monitor.tengo
+Port monitoring script that:
+- Defines expected ports per device
+- Alerts on unexpected open ports
+- Alerts on missing expected ports
+- Monitors critical ports on unknown devices
 
-Once implemented (Phase 4), scripts will be able to:
+### device-inventory.tengo
+Device inventory management that:
+- Lists all tracked devices
+- Counts devices by status
+- Tracks changes over time
+- Stores counts in persistent storage
 
-- Perform network scans with custom parameters
-- Query and filter device information
-- Create custom alerts and notifications
-- Integrate with external systems
-- Automate network monitoring tasks
-- Store persistent data with key-value storage
+### new-device-watcher.tengo
+New device detection script that:
+- Identifies newly discovered devices
+- Logs detailed device information
+- Generates alerts for new devices
+- Tracks total new devices over time
+
+### health-check.tengo
+Network health diagnostics that:
+- Runs a network scan
+- Calculates online/offline ratios
+- Checks hostname resolution rates
+- Verifies scan time targets
+- Generates overall health score
 
 ## Script API Reference
 
-See the PLAN.md Section 3.5 for the complete scripting API documentation.
-
 ### Network Functions
-- `scan(subnet)` - Perform network scan
-- `ping(ip)` - ICMP ping
-- `portScan(ip, ports)` - TCP port scan
+- `scan()` - Perform network scan, returns result object
+- `ping(ip)` - ICMP ping, returns latency
+- `port_scan(ip, ports)` - TCP port scan
 - `resolve(hostname)` - DNS lookup
 
 ### Device Management
-- `getDevices()` - Get all devices
-- `getDevice(ip)` - Get specific device
-- `findDevices(filter)` - Filter devices
+- `get_devices()` - Get all tracked devices
+- `get_device(ip)` - Get specific device by IP
 
 ### Alert Functions
-- `alert(message, severity)` - Create alert
-- `alertDevice(ip, message, severity)` - Device-specific alert
+- `alert(type, message)` - Create alert with type and message
 
 ### Storage Functions
-- `set(key, value)` - Store data
-- `get(key)` - Retrieve data
-- `exists(key)` - Check if key exists
+- `set(key, value)` - Store persistent data
+- `get(key)` - Retrieve data (returns undefined if not found)
+- `delete(key)` - Remove data
 
-For complete API documentation, see [PLAN.md](../../PLAN.md).
+### Device Object Properties
+```tengo
+device.ip         // IP address (string)
+device.mac        // MAC address (string, may be empty)
+device.hostname   // Hostname (string, may be empty)
+device.vendor     // Vendor name (string, may be empty)
+device.ports      // Open ports (array of integers)
+device.status     // Status: "online", "offline", "new", "changed"
+device.first_seen // First discovery timestamp
+device.last_seen  // Last seen timestamp
+```
+
+### Scan Result Object
+```tengo
+result.devices    // Array of discovered devices
+result.scan_time  // Scan duration in milliseconds
+result.method     // Scan method used
+```
+
+## Running Scripts
+
+```bash
+# Run a script
+tuimap script run scripts/examples/auto-scan.tengo
+
+# Run with TUI script console
+tuimap  # Then press '4' for Script Console
+```
+
+## Writing Your Own Scripts
+
+1. Create a `.tengo` file in `~/.config/tuimap/scripts/`
+2. Use the API functions documented above
+3. Test with `tuimap script run your-script.tengo`
+
+### Best Practices
+
+- Use descriptive comments
+- Handle undefined values (e.g., `if hostname != undefined`)
+- Store state for tracking changes over time
+- Use appropriate alert types: "new_device", "device_offline", "port_change", "mac_conflict"
+- Keep scripts focused on single tasks
+
+### Script Limits
+
+| Limit | Value | Purpose |
+|-------|-------|---------|
+| Execution time | 30s | Prevent runaway scripts |
+| Memory | 50MB | Prevent memory exhaustion |
+| File access | None | Security sandboxing |
+| System commands | None | Security isolation |
+
+For complete API documentation, see [API.md](../../docs/API.md).

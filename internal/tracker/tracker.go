@@ -48,7 +48,3 @@ type Tracker interface {
 	// GetAlerts returns all alerts
 	GetAlerts() []Alert
 }
-
-// TODO: Implement device tracker with in-memory registry
-// TODO: Implement alert engine
-// TODO: Implement persistence layer

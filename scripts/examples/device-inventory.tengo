@@ -1,0 +1,77 @@
+// TuiMap Example: Device Inventory
+// Exports device inventory and tracks changes over time
+//
+// Usage: tuimap script run scripts/examples/device-inventory.tengo
+
+// Get current devices
+devices := get_devices()
+
+// Get previous count from storage
+prev_count := get("inventory_device_count")
+if prev_count == undefined {
+    prev_count = 0
+}
+
+// Count by status
+online_count := 0
+offline_count := 0
+new_count := 0
+
+for device in devices {
+    if device.status == "online" {
+        online_count++
+    } else if device.status == "offline" {
+        offline_count++
+    } else if device.status == "new" {
+        new_count++
+    }
+}
+
+// Print summary
+fmt.println("=== Device Inventory ===")
+fmt.println("Total devices:", len(devices))
+fmt.println("  Online:", online_count)
+fmt.println("  Offline:", offline_count)
+fmt.println("  New:", new_count)
+fmt.println()
+
+// Compare with previous
+if prev_count > 0 {
+    diff := len(devices) - prev_count
+    if diff > 0 {
+        fmt.println("Change: +" + string(diff) + " devices since last check")
+    } else if diff < 0 {
+        fmt.println("Change:", diff, "devices since last check")
+    } else {
+        fmt.println("Change: No change in device count")
+    }
+}
+
+fmt.println()
+
+// List all devices
+fmt.println("=== Device List ===")
+for device in devices {
+    line := device.ip
+    if device.hostname != "" {
+        line += " (" + device.hostname + ")"
+    }
+    line += " - " + device.status
+    if len(device.ports) > 0 {
+        line += " - ports: "
+        for i, port in device.ports {
+            if i > 0 {
+                line += ","
+            }
+            line += string(port)
+        }
+    }
+    fmt.println("  ", line)
+}
+
+// Store current count
+set("inventory_device_count", len(devices))
+set("inventory_last_run", time.now())
+
+fmt.println()
+fmt.println("Inventory saved to storage")

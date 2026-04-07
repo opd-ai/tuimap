@@ -17,7 +17,3 @@ type Engine interface {
 	// Stop stops all running scripts
 	Stop()
 }
-
-// TODO: Implement Tengo VM integration
-// TODO: Implement API bridge for network operations
-// TODO: Implement script management
