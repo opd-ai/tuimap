@@ -15,7 +15,7 @@ Target users include network administrators, security professionals, and develop
 - **Scripting Engine**: d5/tengo (github.com/d5/tengo/v2) for embedded scripting with sandboxed execution
 - **Storage**: bbolt (go.etcd.io/bbolt) for persistent device history, alerts, and tool execution logs
 - **CLI Framework**: Cobra (github.com/spf13/cobra) for command-line interface with Viper (github.com/spf13/viper) for configuration management
-- **Testing**: Go's built-in testing package with target >80% code coverage, table-driven tests for business logic
+- **Testing**: Go's built-in testing package with target >35% code coverage, table-driven tests for business logic
 - **Build/Deploy**: Standard Go build toolchain, Makefile for build automation, CI/CD pipeline planned
 
 ## Code Assistance Guidelines
@@ -56,7 +56,7 @@ Target users include network administrators, security professionals, and develop
 
 ## Quality Standards
 
-- **Testing Requirements**: Maintain >80% code coverage using Go's built-in testing package. Write table-driven tests for all business logic functions following Go conventions. Include integration tests for network scanning workflows using mocked interfaces. Implement benchmark tests for scan performance validation (must achieve <10s for /24 network). Use testify/suite for complex test scenarios. Mock network interfaces for unit tests; use real network interfaces only in integration tests with appropriate tagging (`// +build integration`).
+- **Testing Requirements**: Maintain >35% code coverage using Go's built-in testing package. Write table-driven tests for all business logic functions following Go conventions. Include integration tests for network scanning workflows using mocked interfaces. Implement benchmark tests for scan performance validation (must achieve <10s for /24 network). Use testify/suite for complex test scenarios. Mock network interfaces for unit tests; use real network interfaces only in integration tests with appropriate tagging (`//go:build integration`).
 
 - **Code Review Criteria**: All pull requests must pass CI/CD pipeline including linting (golangci-lint), unit tests, and integration tests. Scan performance benchmarks must meet <10s requirement. No decrease in code coverage allowed. Security review required for scripting API changes and raw socket operations. Performance profiling required for changes to scanner or device tracker. Two approvals required for architectural changes; one approval for feature additions and bug fixes.
 

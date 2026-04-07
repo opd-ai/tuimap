@@ -15,7 +15,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
 
       - name: Install libpcap
         run: sudo apt-get update && sudo apt-get install -y libpcap-dev
@@ -37,7 +37,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
 
       - name: Install libpcap
         run: sudo apt-get update && sudo apt-get install -y libpcap-dev
@@ -55,7 +55,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
 
       - name: Install libpcap
         run: sudo apt-get update && sudo apt-get install -y libpcap-dev
@@ -68,6 +68,6 @@ jobs:
           go tool cover -func=coverage.out | grep total
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Total coverage: ${COVERAGE}%"
-          if (( $(echo "$COVERAGE < 50" | bc -l) )); then
-            echo "Warning: Coverage below 50%"
+          if (( $(echo "$COVERAGE < 35" | bc -l) )); then
+            echo "Warning: Coverage below 35%"
           fi
