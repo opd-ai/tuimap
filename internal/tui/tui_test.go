@@ -738,8 +738,8 @@ func TestScanResultMsgSuccess(t *testing.T) {
 	if len(updated.devices) != 1 {
 		t.Errorf("Expected 1 device, got %d", len(updated.devices))
 	}
-	if !strings.Contains(updated.status, "Found") {
-		t.Errorf("Expected 'Found' in status, got '%s'", updated.status)
+	if !strings.Contains(updated.status, "Scan complete") {
+		t.Errorf("Expected 'Scan complete' in status, got '%s'", updated.status)
 	}
 }
 
@@ -754,8 +754,8 @@ func TestScanResultMsgError(t *testing.T) {
 	newModel, _ := m.Update(msg)
 	updated := newModel.(Model)
 
-	if !strings.Contains(updated.status, "Scan failed") {
-		t.Errorf("Expected 'Scan failed' in status, got '%s'", updated.status)
+	if !strings.Contains(updated.status, "Scan error") {
+		t.Errorf("Expected 'Scan error' in status, got '%s'", updated.status)
 	}
 }
 
