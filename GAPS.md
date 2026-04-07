@@ -1,186 +1,215 @@
 # Implementation Gaps — 2026-04-07
 
-This document details the gaps between TuiMap's stated goals (from README.md and PLAN.md) and its current implementation status. Each gap represents a feature that is documented/promised but not yet functional.
+This document identifies gaps between TuiMap's stated goals and its current implementation.
 
 ---
 
-## Network Scanner (CRITICAL)
+## 1. Test Coverage Target Not Met
 
-- **Stated Goal**: "Discover all devices on /24 networks in under 10 seconds" using parallel multi-method scanning (ARP, ICMP, TCP)
-- **Current State**: Only interface definition exists at `internal/scanner/scanner.go:50-57`. Lines 59-63 contain TODO comments for ARP, ICMP, TCP, and passive discovery scanners. No actual scanning implementation. Zero dependencies for packet capture (gopacket not in go.mod).
-- **Impact**: This is the project's core value proposition. Without functional scanning, TuiMap provides no network discovery capability whatsoever. Users cannot discover devices, making the tool unusable for its primary purpose.
+- **Stated Goal**: >80% test coverage (from project conventions and quality standards)
+- **Current State**: Overall coverage approximately 52%. Individual packages range from 14.8% (`internal/tools`) to 91.4% (`internal/tui`)
+- **Impact**: Reduced confidence in code correctness. The scanner and tools packages—core functionality—have the lowest coverage, increasing risk of undetected regressions
 - **Closing the Gap**:
-  1. Add dependencies: `go get github.com/google/gopacket golang.org/x/net/icmp github.com/jackpal/gateway`
-  2. Implement `internal/scanner/arp.go` — ARP scanner with 256 worker goroutines, 100ms timeout per request
-  3. Implement `internal/scanner/icmp.go` — ICMP ping sweep with 256 workers, 1s timeout
-  4. Implement `internal/scanner/tcp.go` — TCP SYN scanner on ports 22,80,443,3389,5900 with 512 workers
-  5. Implement `internal/scanner/orchestrator.go` — Parallel execution of all methods with 10s total timeout
-  6. Create benchmark tests validating <10s scan time for /24 network
+  1. **internal/tools** (14.8% → 80%): Add tests for netcat, telnet, traceroute, whois. Mock network connections for deterministic tests. Focus on `Execute()` methods and edge cases. Estimated: 2 days
+  2. **internal/scanner** (37.9% → 80%): Add tests for ARP, ICMP, TCP scanners. Use mock interfaces. Test `Scan()`, `pingWorker()`, `mergeDevices()` which have highest complexity. Estimated: 3 days  
+  3. **internal/config** (48.8% → 80%): Test `LoadConfig()` with missing file, malformed YAML, env var overrides. Estimated: 1 day
+  4. **internal/script** (54.5% → 80%): Test timeout behavior, memory limits, invalid scripts, all API functions. Estimated: 1.5 days
+  5. **internal/nat** (67.3% → 80%): Mock STUN responses, test UPnP/NAT-PMP discovery edge cases. Estimated: 1 day
+
+  **Validation**:
+  ```bash
+  go test -coverprofile=coverage.out ./...
+  go tool cover -func=coverage.out | grep total
+  # Must show ≥80%
+  ```
 
 ---
 
-## Device Tracker (CRITICAL)
+## 2. UPnP/NAT-PMP Port Mapping (Stub Implementation)
 
-- **Stated Goal**: "Monitor device status changes and receive alerts" with real-time device state management, alert engine, and persistent history
-- **Current State**: Only types and interface defined at `internal/tracker/tracker.go`. Tracker interface (lines 37-50) has no implementations. TODO comments at lines 52-54 mark unimplemented features. No in-memory registry, alert logic, or persistence layer.
-- **Impact**: Users cannot track device changes over time or receive notifications for new devices, offline events, or port changes. Network monitoring use cases are completely unsupported.
+- **Stated Goal**: NAT package provides `AddPortMapping()` and `RemovePortMapping()` via `NATClient` interface (documented in `pkg/api/api.go` and `internal/nat/nat.go:75-78`)
+- **Current State**: Methods `addMappingUPnP()` and `addMappingNATPMP()` at `internal/nat/nat.go:501-512` return `ErrNATUnsupported`. The public `AddPortMapping()` method at line 176 calls these stubs and always fails
+- **Impact**: Users cannot programmatically create port forwarding rules despite the interface promising this capability. This affects scenarios where TuiMap needs to make services accessible across NAT boundaries
 - **Closing the Gap**:
-  1. Add dependency: `go get go.etcd.io/bbolt`
-  2. Implement `internal/tracker/registry.go` — Thread-safe in-memory device map with `sync.RWMutex`
-  3. Implement `internal/tracker/state.go` — State change detection (new, online, offline, changed)
-  4. Implement `internal/tracker/alerts.go` — Rule-based alert engine matching config.AlertsConfig
-  5. Implement `internal/tracker/storage.go` — bbolt persistence for device history
-  6. Wire tracker to receive scan results and emit events via channels
+  1. **Option A (Full Implementation)**: Implement UPnP IGD SOAP calls for `AddPortMapping` action. Parse SSDP discovery response to get control URL, then make SOAP POST to `urn:schemas-upnp-org:service:WANIPConnection:1`. For NAT-PMP, send proper mapping request packets per RFC 6886
+  2. **Option B (Remove from Interface)**: Remove `AddPortMapping()` and `RemovePortMapping()` from `NATClient` interface if not planned for implementation. Update documentation to clarify port mapping is not supported
+  3. **Option C (Document Limitation)**: Keep interface but document that port mapping requires external gateway support and returns `ErrNATUnsupported` when not available
+
+  **Validation**:
+  ```bash
+  # If implementing:
+  go test ./internal/nat/... -v -run TestAddPortMapping
+  # If removing:
+  grep -n "AddPortMapping" pkg/api/*.go internal/nat/*.go
+  # Should show no references after removal
+  ```
 
 ---
 
-## Network Tools — Netcat, Telnet, Traceroute, Dig, Whois (CRITICAL)
+## 3. Scan Performance Benchmark Validation
 
-- **Stated Goal**: "Built-in netcat, telnet, traceroute, dig, and whois" as integrated network diagnostic tools
-- **Current State**: Only NetworkTool interface exists at `internal/tools/tools.go:9-19`. Lines 21-25 contain TODO comments for all 5 tools. Zero implementations.
-- **Impact**: Users cannot perform any network diagnostics within TuiMap. The integrated tools feature is entirely non-functional. Users must exit TuiMap to use standard system utilities.
+- **Stated Goal**: "Discover all devices on /24 networks in under 10 seconds" (README.md line 10)
+- **Current State**: Implementation exists with 10-second timeout in `CreateDefaultOrchestrator()` (`internal/scanner/orchestrator.go:234`). However, there are no benchmark tests validating this claim
+- **Impact**: The core differentiating claim cannot be verified. Performance regressions could go undetected
 - **Closing the Gap**:
-  1. Implement `internal/tools/netcat.go` — TCP/UDP client with send/receive, optional listen mode
-  2. Implement `internal/tools/telnet.go` — Telnet protocol with WILL/WONT/DO/DONT negotiation
-  3. Implement `internal/tools/traceroute.go` — ICMP or UDP-based path discovery with hop timing
-  4. Implement `internal/tools/dig.go` — DNS queries (A, AAAA, MX, TXT, NS, CNAME) using `net.Resolver`
-  5. Implement `internal/tools/whois.go` — RFC 3912 WHOIS client for domain/IP lookups
-  6. Create base framework for tool lifecycle management and output streaming
+  1. Create `internal/scanner/benchmark_test.go` with benchmark functions:
+     - `BenchmarkARPScan` — target <3s for /24
+     - `BenchmarkICMPScan` — target <4s for /24
+     - `BenchmarkTCPScan` — target <3s for /24 (5 ports)
+     - `BenchmarkOrchestrator` — target <10s end-to-end
+  2. Add CI step to run benchmarks weekly or on performance-critical PRs
+  3. Implement benchmark comparison to detect regressions
+
+  **Validation**:
+  ```bash
+  go test -bench=BenchmarkOrchestrator ./internal/scanner/... -benchtime=5x
+  # Average time must be <10s
+  ```
 
 ---
 
-## TUI Interface (CRITICAL)
+## 4. TUI Scan Integration Incomplete
 
-- **Stated Goal**: "Interactive terminal UI with multiple views" including Network Map View, Device List View, Tool View, and Script Console per PLAN.md Section 1.2.5
-- **Current State**: Package `internal/tui/tui.go` contains only package declaration and TODO comments (lines 5-9). No Bubble Tea integration, no views, no models, no keybindings.
-- **Impact**: Users have no interactive interface. The application only shows CLI help text. All TUI-related claims in README are non-functional.
+- **Stated Goal**: Modern TUI interface with network scanning capability (pressing 's' initiates scan)
+- **Current State**: The TUI at `internal/tui/app.go:149-150` handles 's' key by setting status to "Scanning..." but does not actually invoke any scanner. The `Model` struct has `scanResult` field but no code populates it. `SetDevices()` exists at line 348 but is never called from the Update loop
+- **Impact**: Users see "Scanning..." status but no scan occurs. The TUI is display-only without actual network discovery integration
 - **Closing the Gap**:
-  1. Add dependencies: `go get github.com/charmbracelet/bubbletea github.com/charmbracelet/lipgloss`
-  2. Implement `internal/tui/app.go` — Main Bubble Tea Model with view switching (keys 1-4)
-  3. Implement `internal/tui/views/network_map.go` — Visual topology with gateway relationships
-  4. Implement `internal/tui/views/device_list.go` — Sortable table with filter/search
-  5. Implement `internal/tui/views/tool_view.go` — Tab interface for network tools
-  6. Implement `internal/tui/views/script_console.go` — Script editor and execution display
-  7. Add keybindings: q=quit, s=scan, r=refresh, f=filter, t=tools
+  1. Add `scanner.Orchestrator` and `tracker.Registry` fields to `Model` struct
+  2. In 's' key handler, send a `tea.Cmd` that invokes `orchestrator.Scan()`
+  3. Create message type for scan results and update `Model.devices` in Update
+  4. Wire `registry.Update()` to process scan results and generate alerts
+  5. Add refresh timer cmd for periodic scanning based on config
+
+  **Validation**:
+  ```bash
+  # Build and run TUI
+  go build ./cmd/tuimap && sudo ./tuimap
+  # Press 's' - should see devices populate in Device List view
+  ```
 
 ---
 
-## Scripting Engine (CRITICAL)
+## 5. Storage Layer Not Integrated
 
-- **Stated Goal**: "Automate tasks with embedded Tengo scripts (d5/tengo)" per README, with API for network operations, alerts, and persistent storage per PLAN.md Section 1.2.4
-- **Current State**: Only Engine interface at `internal/script/script.go:9-19`. d5/tengo is not in go.mod. Example script at `scripts/examples/auto-scan.tengo` explicitly states "scripting engine is not yet implemented".
-- **Impact**: Users cannot automate any network tasks. The extensibility claim is non-functional. Custom monitoring and alerting scripts cannot be created.
+- **Stated Goal**: Persistent device history using bbolt database (README mentions `~/.local/share/tuimap/tuimap.db`)
+- **Current State**: `internal/tracker/storage.go` implements `Storage` type with `SaveDevice()`, `LoadDevices()`, etc. However:
+  - `cmd/tuimap/main.go` does not instantiate Storage
+  - TUI does not call storage methods
+  - No persistence actually occurs
+- **Impact**: Device history is lost between sessions. History retention setting in config has no effect
 - **Closing the Gap**:
-  1. Add dependency: `go get github.com/d5/tengo/v2`
-  2. Implement `internal/script/engine.go` — Tengo VM initialization with resource limits
-  3. Implement `internal/script/api.go` — Expose scan(), ping(), portScan(), resolve(), alert(), getDevices(), set(), get() functions
-  4. Implement `internal/script/sandbox.go` — Resource limits (30s execution, 50MB memory), no file system access
-  5. Implement script hot-reload and management
-  6. Validate example scripts execute correctly
+  1. In `cmd/tuimap/main.go`, create Storage instance from config
+  2. Pass Storage to Registry or create composite type
+  3. Call `Storage.SaveDevices()` after each scan
+  4. Call `Storage.LoadDevices()` on startup to restore state
+  5. Implement history cleanup based on `storage.history_retention` config
+
+  **Validation**:
+  ```bash
+  # Run scan, quit, restart - previous devices should appear
+  sudo ./tuimap
+  # Press 's' to scan, 'q' to quit
+  sudo ./tuimap
+  # Devices from previous session should be visible
+  ```
 
 ---
 
-## NAT Environment Support (HIGH)
+## 6. CLI Scan Command Missing
 
-- **Stated Goal**: "Optimized for NAT environments and multi-subnet networks" with UPnP/NAT-PMP integration and STUN client per PLAN.md Section 1.2.1
-- **Current State**: Config struct defines NATConfig at `internal/config/config.go:69-75` but no implementation exists. No UPnP, NAT-PMP, STUN, or gateway detection code anywhere in codebase.
-- **Impact**: Users in NAT environments (home routers, enterprise NAT, cloud VPCs) cannot discover external IP addresses, traverse NAT for remote scanning, or detect multi-homed network topology.
+- **Stated Goal**: Documentation shows `tuimap scan --subnet 192.168.1.0/24` (USER_GUIDE.md lines 77-88)
+- **Current State**: `cmd/tuimap/main.go` only defines `rootCmd` (launches TUI), `versionCmd`, `configCmd`, `configInitCmd`, and `configShowCmd`. There is no `scan` subcommand
+- **Impact**: Users cannot perform headless scans from command line as documented. The `--no-tui` flag only shows help text
 - **Closing the Gap**:
-  1. Create `internal/nat/` package
-  2. Implement `internal/nat/upnp.go` — SSDP discovery and UPnP IGD port mapping queries
-  3. Implement `internal/nat/natpmp.go` — NAT-PMP client for compatible routers
-  4. Implement `internal/nat/stun.go` — STUN client using servers from config (stun.l.google.com:19302)
-  5. Implement `internal/scanner/gateway.go` — Gateway detection using `github.com/jackpal/gateway`
-  6. Integrate NAT detection with scanner for adaptive scanning strategies
+  1. Add `scanCmd` with flags: `--subnet`, `--interface`, `--methods`, `--timeout`
+  2. Implement headless scan that outputs results to stdout (JSON or table format)
+  3. Support `--output json` for scriptable output
+  4. Integrate with `--no-tui` flag behavior
+
+  **Validation**:
+  ```bash
+  sudo ./tuimap scan --subnet 192.168.1.0/24 --output json
+  # Should output JSON array of discovered devices
+  ```
 
 ---
 
-## Test Coverage (HIGH)
+## 7. Multi-Subnet Scanning Not Exposed
 
-- **Stated Goal**: ">80% test coverage" per PLAN.md Section 4.5 quality requirements
-- **Current State**: All 8 packages report "no test files" when running `go test ./...`. Test coverage is 0%.
-- **Impact**: Code quality cannot be validated. Regressions will go undetected. Contributors cannot verify their changes don't break existing functionality.
+- **Stated Goal**: "TuiMap can discover and scan multiple subnets" with `--all-subnets` and `--from-routes` flags (USER_GUIDE.md lines 103-110)
+- **Current State**: `internal/scanner/multisubnet.go` implements `MultiSubnetScanner`, `DiscoverSubnets()`, and `ParseRoutingTable()`. However, these are not exposed via CLI or TUI
+- **Impact**: Users cannot utilize multi-subnet scanning capability despite implementation existing
 - **Closing the Gap**:
-  1. Create `internal/config/config_test.go` — Test LoadConfig, InitConfig, DefaultConfig
-  2. Create test files for each package as features are implemented
-  3. Use table-driven tests following Go conventions
-  4. Add mock interfaces for network operations in tests
-  5. Configure CI to enforce coverage threshold: `go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out`
+  1. Add `--all-subnets` flag to scan command that calls `DiscoverSubnets()`
+  2. Add `--from-routes` flag that calls `ParseRoutingTable()`
+  3. In TUI, add subnet selector or auto-detect option
+  4. Update orchestrator to handle multiple subnet results
+
+  **Validation**:
+  ```bash
+  sudo ./tuimap scan --all-subnets
+  # Should discover and scan all local subnets
+  ```
 
 ---
 
-## Public API (HIGH)
+## 8. Script Console Not Functional
 
-- **Stated Goal**: `pkg/api/` package for "public API definitions for external integration" per project structure in README
-- **Current State**: `pkg/api/api.go` contains only "TODO: Define public API interfaces" comment (line 4)
-- **Impact**: External consumers cannot programmatically use TuiMap as a library. Only CLI usage is available.
+- **Stated Goal**: TUI Script Console view allows loading and running Tengo scripts (USER_GUIDE.md lines 414-422)
+- **Current State**: `internal/tui/app.go:282-294` renders static text showing commands (`:load`, `:list`, `:stop`) but the view doesn't accept input. No integration with `internal/script/engine.go`. Cursor shows "> _" but typing does nothing
+- **Impact**: Script automation via TUI is not possible. Users must use scripts programmatically
 - **Closing the Gap**:
-  1. Define exported interfaces mirroring internal capabilities
-  2. Export: Scanner, Tracker, Device, Alert, NetworkTool, ScriptEngine types
-  3. Provide factory functions: NewScanner(), NewTracker(), etc.
-  4. Add comprehensive godoc documentation
-  5. Create usage examples in `pkg/api/example_test.go`
+  1. Add text input component (bubbles/textinput) to Script Console view
+  2. Implement `:load <file>` command to call `engine.LoadFile()`
+  3. Implement `:list` to show files in scripts directory
+  4. Implement `:stop` to call `engine.Stop()`
+  5. Show script output in scrollable area
+  6. Add `TengoEngine` field to Model and wire up
+
+  **Validation**:
+  ```bash
+  sudo ./tuimap
+  # Press '4' for Script Console
+  # Type ':list' - should show available scripts
+  # Type ':load example.tengo' - should execute script
+  ```
 
 ---
 
-## CI/CD Pipeline (MEDIUM)
+## 9. Tool View Not Interactive
 
-- **Stated Goal**: Automated testing and linting per Makefile targets and PLAN.md Phase 7
-- **Current State**: `.github/workflows/` directory exists but contains no workflow files. No automated builds on push/PR.
-- **Impact**: Code quality is not automatically validated. PRs can merge with failing tests or linting errors.
+- **Stated Goal**: TUI Tools View allows selecting and running network tools (USER_GUIDE.md lines 381-391)
+- **Current State**: `internal/tui/app.go:267-280` renders static list of tools with message "Press number to select tool" but key handlers for 1-5 are not implemented. Selecting a tool and entering arguments is not possible
+- **Impact**: Network tools cannot be used interactively from TUI. Users must use tools programmatically
 - **Closing the Gap**:
-  1. Create `.github/workflows/ci.yml` with:
-     - `go test -race ./...`
-     - `go vet ./...`
-     - `golangci-lint run ./...`
-     - Coverage reporting to Codecov or similar
-  2. Add branch protection rules requiring CI pass
-  3. Add status badges to README.md
+  1. Add tool selection state to Model
+  2. Implement key handlers for tool selection (1-5)
+  3. Add text input for tool arguments
+  4. Integrate with tools package Execute methods
+  5. Show tool output in scrollable area
+
+  **Validation**:
+  ```bash
+  sudo ./tuimap
+  # Press '3' for Tools View
+  # Press '1' to select netcat
+  # Enter 'localhost 80' - should show connection result
+  ```
 
 ---
 
-## CLI Default Behavior (MEDIUM)
+## Priority Order
 
-- **Stated Goal**: Running `tuimap` should launch the interactive TUI per README usage examples
-- **Current State**: `cmd/tuimap/main.go:31-34` — rootCmd.Run only calls `cmd.Help()`. No TUI launch, no scanning.
-- **Impact**: Users expecting a network scanner get only help text. The default experience doesn't demonstrate any core functionality.
-- **Closing the Gap**:
-  1. Once TUI is implemented, modify rootCmd.Run to launch Bubble Tea application
-  2. Add `--no-tui` flag for headless/batch mode
-  3. Add `scan` subcommand for one-shot scanning without TUI
-
----
-
-## Config Show Command (LOW)
-
-- **Stated Goal**: `tuimap config show` should display current configuration
-- **Current State**: `cmd/tuimap/main.go:74` has TODO comment. Command only shows config file path, not contents.
-- **Impact**: Users cannot inspect their configuration without manually reading the YAML file.
-- **Closing the Gap**:
-  1. Marshal config struct to YAML and print to stdout
-  2. Add `--json` flag for machine-readable output
-  3. Consider `--get KEY` for querying specific values
+1. **TUI Scan Integration** (Gap #4) — Core functionality, directly impacts main feature claim
+2. **CLI Scan Command** (Gap #6) — Essential for headless/scripted use
+3. **Test Coverage** (Gap #1) — Quality gate, should be addressed alongside features
+4. **Storage Integration** (Gap #5) — Enables persistence, improves usability
+5. **Tool View** (Gap #9) — Completes TUI interactivity
+6. **Script Console** (Gap #8) — Completes TUI interactivity
+7. **Multi-Subnet** (Gap #7) — Power user feature
+8. **Scan Benchmarks** (Gap #3) — Validates marketing claim
+9. **NAT Port Mapping** (Gap #2) — Advanced feature, can be documented as unsupported
 
 ---
 
-## Summary
-
-| Gap | Severity | Effort Estimate | Dependencies |
-|-----|----------|-----------------|--------------|
-| Network Scanner | CRITICAL | 2 weeks | gopacket, icmp, gateway |
-| Device Tracker | CRITICAL | 1 week | bbolt, scanner complete |
-| Network Tools (5) | CRITICAL | 1.5 weeks | None |
-| TUI Interface | CRITICAL | 2 weeks | bubbletea, scanner/tracker complete |
-| Scripting Engine | CRITICAL | 1 week | tengo, scanner/tracker complete |
-| NAT Support | HIGH | 1 week | gateway, scanner complete |
-| Test Coverage | HIGH | Ongoing | Each feature implementation |
-| Public API | HIGH | 3 days | Core features complete |
-| CI/CD Pipeline | MEDIUM | 2 days | None |
-| CLI Default Behavior | MEDIUM | 1 day | TUI complete |
-| Config Show | LOW | 2 hours | None |
-
-**Total estimated effort to close all gaps: 8-9 weeks** (aligns with PLAN.md 12-week timeline minus completed Phase 0)
-
----
-
-*Gaps analysis generated 2026-04-07 based on comparison of README.md/PLAN.md claims vs. actual codebase implementation*
+*Assessment generated 2026-04-07*

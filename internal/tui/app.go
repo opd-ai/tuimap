@@ -2,6 +2,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -23,19 +24,28 @@ const (
 	ViewScriptConsole
 )
 
+// scanResultMsg is sent when a scan completes.
+type scanResultMsg struct {
+	result *scanner.ScanResult
+	err    error
+}
+
 // Model is the main Bubble Tea model for the TUI.
 type Model struct {
-	width       int
-	height      int
-	currentView ViewType
-	devices     []scanner.Device
-	alerts      []tracker.Alert
-	table       table.Model
-	styles      Styles
-	ready       bool
-	scanResult  *scanner.ScanResult
-	status      string
-	lastUpdate  time.Time
+	width        int
+	height       int
+	currentView  ViewType
+	devices      []scanner.Device
+	alerts       []tracker.Alert
+	table        table.Model
+	styles       Styles
+	ready        bool
+	scanResult   *scanner.ScanResult
+	status       string
+	lastUpdate   time.Time
+	orchestrator *scanner.Orchestrator
+	subnet       string
+	scanning     bool
 }
 
 // Styles holds the lipgloss styles for the TUI.
@@ -85,6 +95,11 @@ func NewStyles() Styles {
 
 // NewModel creates a new TUI model.
 func NewModel() Model {
+	return NewModelWithOrchestrator(nil, "")
+}
+
+// NewModelWithOrchestrator creates a new TUI model with a scanner orchestrator.
+func NewModelWithOrchestrator(orch *scanner.Orchestrator, subnet string) Model {
 	columns := []table.Column{
 		{Title: "IP", Width: 15},
 		{Title: "MAC", Width: 17},
@@ -113,12 +128,14 @@ func NewModel() Model {
 	t.SetStyles(s)
 
 	return Model{
-		currentView: ViewDeviceList,
-		table:       t,
-		styles:      NewStyles(),
-		devices:     make([]scanner.Device, 0),
-		alerts:      make([]tracker.Alert, 0),
-		status:      "Ready - Press 's' to scan",
+		currentView:  ViewDeviceList,
+		table:        t,
+		styles:       NewStyles(),
+		devices:      make([]scanner.Device, 0),
+		alerts:       make([]tracker.Alert, 0),
+		status:       "Ready - Press 's' to scan",
+		orchestrator: orch,
+		subnet:       subnet,
 	}
 }
 
@@ -147,7 +164,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.currentView = ViewScriptConsole
 			m.status = "Script Console View"
 		case "s":
-			m.status = "Scanning..."
+			if !m.scanning && m.orchestrator != nil && m.subnet != "" {
+				m.scanning = true
+				m.status = "Scanning..."
+				return m, m.startScan()
+			} else if m.orchestrator == nil {
+				m.status = "Scanner not configured"
+			} else if m.subnet == "" {
+				m.status = "No subnet configured"
+			} else {
+				m.status = "Scan already in progress..."
+			}
 		case "r":
 			m.status = "Refreshing..."
 		}
@@ -156,6 +183,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			m.table, cmd = m.table.Update(msg)
 			return m, cmd
+		}
+
+	case scanResultMsg:
+		m.scanning = false
+		if msg.err != nil {
+			m.status = fmt.Sprintf("Scan error: %v", msg.err)
+		} else {
+			m.devices = msg.result.Devices
+			m.scanResult = msg.result
+			m.lastUpdate = time.Now()
+			m.status = fmt.Sprintf("Scan complete: %d devices found in %v", len(m.devices), msg.result.ScanTime.Round(time.Millisecond))
 		}
 
 	case tea.WindowSizeMsg:
@@ -175,35 +213,35 @@ func (m Model) View() string {
 		return "Loading..."
 	}
 
-	var b strings.Builder
+	var builder strings.Builder
 
 	// Header
 	title := m.styles.Title.Render("TuiMap")
 	subtitle := m.styles.Subtitle.Render(" - Network Analysis Tool")
-	b.WriteString(title + subtitle + "\n\n")
+	builder.WriteString(title + subtitle + "\n\n")
 
 	// Tab bar
-	b.WriteString(m.renderTabs() + "\n\n")
+	builder.WriteString(m.renderTabs() + "\n\n")
 
 	// Main content
 	switch m.currentView {
 	case ViewNetworkMap:
-		b.WriteString(m.renderNetworkMap())
+		builder.WriteString(m.renderNetworkMap())
 	case ViewDeviceList:
-		b.WriteString(m.renderDeviceList())
+		builder.WriteString(m.renderDeviceList())
 	case ViewToolView:
-		b.WriteString(m.renderToolView())
+		builder.WriteString(m.renderToolView())
 	case ViewScriptConsole:
-		b.WriteString(m.renderScriptConsole())
+		builder.WriteString(m.renderScriptConsole())
 	}
 
 	// Status bar
-	b.WriteString("\n" + m.renderStatusBar())
+	builder.WriteString("\n" + m.renderStatusBar())
 
 	// Help
-	b.WriteString("\n" + m.renderHelp())
+	builder.WriteString("\n" + m.renderHelp())
 
-	return b.String()
+	return builder.String()
 }
 
 // renderTabs renders the tab bar.
@@ -228,12 +266,12 @@ func (m Model) renderNetworkMap() string {
 		return m.styles.Border.Render("No devices discovered. Press 's' to scan.")
 	}
 
-	var b strings.Builder
-	b.WriteString("Network Topology:\n\n")
+	var builder strings.Builder
+	builder.WriteString("Network Topology:\n\n")
 
 	// Simple ASCII representation
-	b.WriteString("  [Gateway]\n")
-	b.WriteString("      │\n")
+	builder.WriteString("  [Gateway]\n")
+	builder.WriteString("      │\n")
 
 	for i, device := range m.devices {
 		status := "●"
@@ -251,10 +289,10 @@ func (m Model) renderNetworkMap() string {
 			conn = "└──"
 		}
 
-		b.WriteString(fmt.Sprintf("      %s %s %s (%s)\n", conn, status, device.IP, device.Hostname))
+		builder.WriteString(fmt.Sprintf("      %s %s %s (%s)\n", conn, status, device.IP, device.Hostname))
 	}
 
-	return m.styles.Border.Width(m.width - 4).Render(b.String())
+	return m.styles.Border.Width(m.width - 4).Render(builder.String())
 }
 
 // renderDeviceList renders the device list view.
@@ -267,30 +305,30 @@ func (m Model) renderDeviceList() string {
 func (m Model) renderToolView() string {
 	tools := []string{"netcat", "telnet", "traceroute", "dig", "whois"}
 
-	var b strings.Builder
-	b.WriteString("Available Network Tools:\n\n")
+	var builder strings.Builder
+	builder.WriteString("Available Network Tools:\n\n")
 
 	for i, tool := range tools {
-		b.WriteString(fmt.Sprintf("  [%d] %s\n", i+1, tool))
+		builder.WriteString(fmt.Sprintf("  [%d] %s\n", i+1, tool))
 	}
 
-	b.WriteString("\nPress number to select tool, then enter command arguments.")
+	builder.WriteString("\nPress number to select tool, then enter command arguments.")
 
-	return m.styles.Border.Width(m.width - 4).Render(b.String())
+	return m.styles.Border.Width(m.width - 4).Render(builder.String())
 }
 
 // renderScriptConsole renders the script console view.
 func (m Model) renderScriptConsole() string {
-	var b strings.Builder
-	b.WriteString("Script Console (Tengo):\n\n")
-	b.WriteString("Scripts directory: ~/.config/tuimap/scripts\n\n")
-	b.WriteString("Available commands:\n")
-	b.WriteString("  :load <script.tengo>  - Load and run a script\n")
-	b.WriteString("  :list                 - List available scripts\n")
-	b.WriteString("  :stop                 - Stop running script\n\n")
-	b.WriteString("> _")
+	var builder strings.Builder
+	builder.WriteString("Script Console (Tengo):\n\n")
+	builder.WriteString("Scripts directory: ~/.config/tuimap/scripts\n\n")
+	builder.WriteString("Available commands:\n")
+	builder.WriteString("  :load <script.tengo>  - Load and run a script\n")
+	builder.WriteString("  :list                 - List available scripts\n")
+	builder.WriteString("  :stop                 - Stop running script\n\n")
+	builder.WriteString("> _")
 
-	return m.styles.Border.Width(m.width - 4).Render(b.String())
+	return m.styles.Border.Width(m.width - 4).Render(builder.String())
 }
 
 // renderStatusBar renders the status bar.
@@ -360,9 +398,27 @@ func (m *Model) SetStatus(status string) {
 	m.status = status
 }
 
+// startScan returns a command that performs the network scan asynchronously.
+func (m Model) startScan() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+
+		result, err := m.orchestrator.Scan(ctx, m.subnet)
+		return scanResultMsg{result: result, err: err}
+	}
+}
+
 // Run starts the TUI.
 func Run() error {
 	p := tea.NewProgram(NewModel(), tea.WithAltScreen())
+	_, err := p.Run()
+	return err
+}
+
+// RunWithOrchestrator starts the TUI with a scanner orchestrator.
+func RunWithOrchestrator(orch *scanner.Orchestrator, subnet string) error {
+	p := tea.NewProgram(NewModelWithOrchestrator(orch, subnet), tea.WithAltScreen())
 	_, err := p.Run()
 	return err
 }

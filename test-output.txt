@@ -1,0 +1,12 @@
+# github.com/opd-ai/tuimap/cmd/tuimap
+cmd/tuimap/main.go:83:15: undefined: tui.RunWithOrchestratorAndStorage
+FAIL	github.com/opd-ai/tuimap/cmd/tuimap [build failed]
+ok  	github.com/opd-ai/tuimap/internal/config	1.029s
+ok  	github.com/opd-ai/tuimap/internal/nat	1.423s
+ok  	github.com/opd-ai/tuimap/internal/scanner	1.541s
+ok  	github.com/opd-ai/tuimap/internal/script	1.515s
+ok  	github.com/opd-ai/tuimap/internal/tools	5.032s
+ok  	github.com/opd-ai/tuimap/internal/tracker	1.125s
+ok  	github.com/opd-ai/tuimap/internal/tui	1.054s
+ok  	github.com/opd-ai/tuimap/pkg/api	1.016s
+FAIL

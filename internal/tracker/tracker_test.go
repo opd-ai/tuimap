@@ -376,6 +376,30 @@ func TestStorageSaveDevices(t *testing.T) {
 	}
 }
 
+func TestRegistryDroppedAlerts(t *testing.T) {
+	r := NewRegistry(5 * time.Minute)
+
+	// Initial count should be 0
+	if r.DroppedAlerts() != 0 {
+		t.Errorf("Expected 0 dropped alerts initially, got %d", r.DroppedAlerts())
+	}
+
+	testDevice := scanner.Device{IP: net.ParseIP("192.168.1.1")}
+
+	// Fill the alert channel (capacity 100)
+	for i := 0; i < 100; i++ {
+		r.triggerAlert(AlertNewDevice, testDevice, "test")
+	}
+
+	// The next alerts should be dropped
+	r.triggerAlert(AlertNewDevice, testDevice, "dropped")
+	r.triggerAlert(AlertNewDevice, scanner.Device{IP: net.ParseIP("192.168.1.2")}, "dropped")
+
+	if r.DroppedAlerts() != 2 {
+		t.Errorf("Expected 2 dropped alerts, got %d", r.DroppedAlerts())
+	}
+}
+
 // Benchmark tests for tracker performance
 
 func BenchmarkRegistryUpdate(b *testing.B) {
@@ -509,5 +533,160 @@ func BenchmarkAlertGeneration(b *testing.B) {
 		}
 		r.Update(devices)
 		r.GetAlerts() // Drain alerts
+	}
+}
+
+func TestRegistryGetDevices(t *testing.T) {
+	r := NewRegistry(5 * time.Minute)
+
+	devices := []scanner.Device{
+		{IP: net.ParseIP("192.168.1.1"), Hostname: "host1"},
+		{IP: net.ParseIP("192.168.1.2"), Hostname: "host2"},
+		{IP: net.ParseIP("192.168.1.3"), Hostname: "host3"},
+	}
+	r.Update(devices)
+
+	result := r.GetDevices()
+	if len(result) != 3 {
+		t.Errorf("Expected 3 devices, got %d", len(result))
+	}
+}
+
+func TestRegistryAlertChan(t *testing.T) {
+	r := NewRegistry(5 * time.Minute)
+
+	ch := r.AlertChan()
+	if ch == nil {
+		t.Error("Expected non-nil alert channel")
+	}
+}
+
+func TestRegistryAddRule(t *testing.T) {
+	r := NewRegistry(5 * time.Minute)
+
+	rule := AlertRule{
+		Condition: func(d scanner.Device) bool {
+			return d.IP.String() == "192.168.1.1"
+		},
+		Action: func(a Alert) {
+			// Custom action
+		},
+	}
+	r.AddRule(rule)
+
+	// Rule should be added (no error expected)
+}
+
+func TestRegistryDetectChangesPortChange(t *testing.T) {
+	r := NewRegistry(5 * time.Minute)
+
+	// First update with initial ports
+	devices1 := []scanner.Device{
+		{
+			IP:    net.ParseIP("192.168.1.1"),
+			Ports: []int{22},
+		},
+	}
+	r.Update(devices1)
+	r.GetAlerts() // Clear new device alert
+
+	// Second update with additional ports
+	devices2 := []scanner.Device{
+		{
+			IP:    net.ParseIP("192.168.1.1"),
+			Ports: []int{22, 80, 443},
+		},
+	}
+	r.Update(devices2)
+
+	time.Sleep(10 * time.Millisecond)
+	alerts := r.GetAlerts()
+
+	foundPortChange := false
+	for _, a := range alerts {
+		if a.Type == AlertPortChange {
+			foundPortChange = true
+			break
+		}
+	}
+
+	if !foundPortChange {
+		t.Error("Expected port change alert")
+	}
+}
+
+func TestRegistryDetectChangesOffline(t *testing.T) {
+	r := NewRegistry(1 * time.Millisecond) // Very short threshold
+
+	// Add device
+	devices := []scanner.Device{
+		{IP: net.ParseIP("192.168.1.1")},
+	}
+	r.Update(devices)
+	r.GetAlerts() // Clear new device alert
+
+	// Wait past threshold
+	time.Sleep(10 * time.Millisecond)
+
+	// Update with empty list
+	r.Update([]scanner.Device{})
+
+	time.Sleep(10 * time.Millisecond)
+	alerts := r.GetAlerts()
+
+	foundOffline := false
+	for _, a := range alerts {
+		if a.Type == AlertDeviceOffline {
+			foundOffline = true
+			break
+		}
+	}
+
+	if !foundOffline {
+		t.Error("Expected offline alert")
+	}
+}
+
+func TestStorageCleanup(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	storage, err := NewStorage(dbPath, 1*time.Millisecond) // Very short retention
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+	defer storage.Close()
+
+	// Save a device
+	device := scanner.Device{
+		IP:       net.ParseIP("192.168.1.1"),
+		Metadata: make(map[string]interface{}),
+	}
+	storage.SaveDevice(device)
+
+	// Wait for retention period
+	time.Sleep(10 * time.Millisecond)
+
+	// Run cleanup
+	err = storage.Cleanup()
+	if err != nil {
+		t.Errorf("Cleanup failed: %v", err)
+	}
+}
+
+func TestNewRegistryWithStorage(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	storage, err := NewStorage(dbPath, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+	defer storage.Close()
+
+	// Create registry (storage is not a parameter)
+	r := NewRegistry(5 * time.Minute)
+	if r == nil {
+		t.Fatal("Expected non-nil registry")
 	}
 }

@@ -30,27 +30,41 @@ const (
 	ProtocolUDP Protocol = "udp"
 )
 
-// NATInfo contains information about the NAT environment.
-type NATInfo struct {
+// STUN protocol constants (RFC 5389).
+const (
+	// stunBindingRequest is the message type for a STUN Binding Request.
+	stunBindingRequest = 0x0001
+	// stunMagicCookie is the fixed magic cookie value in STUN headers.
+	stunMagicCookie = 0x2112A442
+	// stunHeaderSize is the size of a STUN message header.
+	stunHeaderSize = 20
+	// stunMinResponseSize is the minimum valid STUN response size.
+	stunMinResponseSize = 20
+	// stunMaxResponseSize is the buffer size for STUN responses.
+	stunMaxResponseSize = 512
+)
+
+// Info contains information about the NAT environment.
+type Info struct {
 	ExternalIP   net.IP        `json:"external_ip,omitempty"`
 	InternalIP   net.IP        `json:"internal_ip,omitempty"`
 	GatewayIP    net.IP        `json:"gateway_ip,omitempty"`
-	Type         NATType       `json:"type"`
+	Type         Type          `json:"type"`
 	UPnPEnabled  bool          `json:"upnp_enabled"`
 	NATPMPEnable bool          `json:"natpmp_enabled"`
 	Latency      time.Duration `json:"latency,omitempty"`
 }
 
-// NATType represents the type of NAT detected.
-type NATType string
+// Type represents the type of NAT detected.
+type Type string
 
 const (
-	NATTypeNone           NATType = "none"
-	NATTypeFull           NATType = "full_cone"
-	NATTypeRestricted     NATType = "restricted_cone"
-	NATTypePortRestricted NATType = "port_restricted"
-	NATTypeSymmetric      NATType = "symmetric"
-	NATTypeUnknown        NATType = "unknown"
+	TypeNone           Type = "none"
+	TypeFull           Type = "full_cone"
+	TypeRestricted     Type = "restricted_cone"
+	TypePortRestricted Type = "port_restricted"
+	TypeSymmetric      Type = "symmetric"
+	TypeUnknown        Type = "unknown"
 )
 
 // PortMapping represents an active port mapping.
@@ -63,15 +77,17 @@ type PortMapping struct {
 	CreatedAt    time.Time     `json:"created_at"`
 }
 
-// NATClient provides NAT traversal operations.
-type NATClient interface {
+// Discoverer provides NAT traversal operations.
+type Discoverer interface {
 	// Discover finds NAT devices and determines NAT type.
-	Discover(ctx context.Context) (*NATInfo, error)
+	Discover(ctx context.Context) (*Info, error)
 
 	// GetExternalIP returns the public IP address.
 	GetExternalIP(ctx context.Context) (net.IP, error)
 
 	// AddPortMapping creates a port forwarding rule.
+	// NOTE: Currently returns ErrNATUnsupported as UPnP/NAT-PMP port mapping
+	// is not yet implemented. This interface method exists for future compatibility.
 	AddPortMapping(ctx context.Context, internal, external int, proto Protocol, desc string, lifetime time.Duration) (*PortMapping, error)
 
 	// RemovePortMapping removes a port forwarding rule.
@@ -81,13 +97,13 @@ type NATClient interface {
 	ListMappings(ctx context.Context) ([]PortMapping, error)
 }
 
-// Client implements NATClient with multiple traversal methods.
+// Client implements Discoverer with multiple traversal methods.
 type Client struct {
 	mu          sync.RWMutex
 	gatewayIP   net.IP
 	internalIP  net.IP
 	externalIP  net.IP
-	natInfo     *NATInfo
+	natInfo     *Info
 	mappings    map[string]*PortMapping
 	stunServers []string
 }
@@ -112,12 +128,12 @@ var defaultSTUNServers = []string{
 }
 
 // Discover finds NAT devices and determines the NAT configuration.
-func (c *Client) Discover(ctx context.Context) (*NATInfo, error) {
+func (c *Client) Discover(ctx context.Context) (*Info, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	info := &NATInfo{
-		Type: NATTypeUnknown,
+	info := &Info{
+		Type: TypeUnknown,
 	}
 
 	// Get gateway IP
@@ -142,9 +158,9 @@ func (c *Client) Discover(ctx context.Context) (*NATInfo, error) {
 
 		// Determine if behind NAT
 		if localIP != nil && externalIP != nil && !localIP.Equal(externalIP) {
-			info.Type = NATTypeRestricted // Default assumption
+			info.Type = TypeRestricted // Default assumption
 		} else if localIP != nil && externalIP != nil && localIP.Equal(externalIP) {
-			info.Type = NATTypeNone
+			info.Type = TypeNone
 		}
 	}
 
@@ -260,19 +276,20 @@ func stunRequest(ctx context.Context, server string) (net.IP, error) {
 		return nil, err
 	}
 
-	// STUN Binding Request (RFC 5389)
+	// Build STUN Binding Request (RFC 5389)
 	// Header: type (2) + length (2) + magic cookie (4) + transaction ID (12)
-	request := make([]byte, 20)
-	request[0] = 0x00 // Binding Request
-	request[1] = 0x01
+	request := make([]byte, stunHeaderSize)
+	request[0] = byte(stunBindingRequest >> 8)
+	request[1] = byte(stunBindingRequest & 0xFF)
 	// Length is 0 (no attributes)
-	// Magic Cookie
-	request[4] = 0x21
-	request[5] = 0x12
-	request[6] = 0xa4
-	request[7] = 0x42
-	// Transaction ID (random-ish)
-	for i := 8; i < 20; i++ {
+	// Magic Cookie (big-endian)
+	cookie := uint32(stunMagicCookie)
+	request[4] = byte(cookie >> 24)
+	request[5] = byte(cookie >> 16)
+	request[6] = byte(cookie >> 8)
+	request[7] = byte(cookie & 0xFF)
+	// Transaction ID (deterministic for reproducibility)
+	for i := 8; i < stunHeaderSize; i++ {
 		request[i] = byte(i * 17)
 	}
 
@@ -280,13 +297,13 @@ func stunRequest(ctx context.Context, server string) (net.IP, error) {
 		return nil, fmt.Errorf("write failed: %w", err)
 	}
 
-	response := make([]byte, 512)
+	response := make([]byte, stunMaxResponseSize)
 	n, err := conn.Read(response)
 	if err != nil {
 		return nil, fmt.Errorf("read failed: %w", err)
 	}
 
-	if n < 20 {
+	if n < stunMinResponseSize {
 		return nil, errors.New("response too short")
 	}
 
@@ -417,9 +434,17 @@ func getLocalIP() (net.IP, error) {
 	return localAddr.IP, nil
 }
 
+// setUDPDeadline sets a deadline on a UDP connection from context or default.
+func setUDPDeadline(conn *net.UDPConn, ctx context.Context, defaultTimeout time.Duration) error {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(defaultTimeout)
+	}
+	return conn.SetDeadline(deadline)
+}
+
 // discoverUPnP attempts to discover UPnP IGD devices.
 func (c *Client) discoverUPnP(ctx context.Context) bool {
-	// Simple SSDP M-SEARCH for UPnP IGD
 	ssdpAddr := &net.UDPAddr{IP: net.IPv4(239, 255, 255, 250), Port: 1900}
 
 	conn, err := net.DialUDP("udp4", nil, ssdpAddr)
@@ -428,11 +453,7 @@ func (c *Client) discoverUPnP(ctx context.Context) bool {
 	}
 	defer conn.Close()
 
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		deadline = time.Now().Add(2 * time.Second)
-	}
-	if err := conn.SetDeadline(deadline); err != nil {
+	if err := setUDPDeadline(conn, ctx, 2*time.Second); err != nil {
 		return false
 	}
 
@@ -453,7 +474,6 @@ func (c *Client) discoverUPnP(ctx context.Context) bool {
 		return false
 	}
 
-	// Check if we got a valid response
 	response := string(buf[:n])
 	return len(response) > 0 && (contains(response, "200 OK") || contains(response, "InternetGatewayDevice"))
 }
@@ -465,7 +485,6 @@ func (c *Client) discoverNATPMP(ctx context.Context) bool {
 		return false
 	}
 
-	// NAT-PMP runs on port 5351
 	addr := &net.UDPAddr{IP: gateway, Port: 5351}
 	conn, err := net.DialUDP("udp4", nil, addr)
 	if err != nil {
@@ -473,16 +492,12 @@ func (c *Client) discoverNATPMP(ctx context.Context) bool {
 	}
 	defer conn.Close()
 
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		deadline = time.Now().Add(2 * time.Second)
-	}
-	if err := conn.SetDeadline(deadline); err != nil {
+	if err := setUDPDeadline(conn, ctx, 2*time.Second); err != nil {
 		return false
 	}
 
-	// NAT-PMP external address request
-	request := []byte{0x00, 0x00} // Version 0, Opcode 0
+	// NAT-PMP external address request: Version 0, Opcode 0
+	request := []byte{0x00, 0x00}
 	if _, err := conn.Write(request); err != nil {
 		return false
 	}
@@ -493,11 +508,14 @@ func (c *Client) discoverNATPMP(ctx context.Context) bool {
 		return false
 	}
 
-	// Valid response should be 12 bytes with version 0 and result code 0
+	// Valid response: 12 bytes with version 0 and result code 0
 	return n == 12 && buf[0] == 0 && buf[1] == 128 && buf[2] == 0 && buf[3] == 0
 }
 
 // addMappingUPnP adds a port mapping via UPnP.
+// NOTE: This is currently a stub function. Full UPnP IGD implementation requires
+// SOAP/HTTP calls to the gateway's control URL. This returns ErrNATUnsupported
+// until UPnP IGD support is fully implemented.
 func (c *Client) addMappingUPnP(_ context.Context, _ *PortMapping) error {
 	// Full UPnP implementation requires SOAP calls
 	// This is a placeholder - real implementation would use UPnP library
@@ -505,6 +523,9 @@ func (c *Client) addMappingUPnP(_ context.Context, _ *PortMapping) error {
 }
 
 // addMappingNATPMP adds a port mapping via NAT-PMP.
+// NOTE: This is currently a stub function. NAT-PMP implementation requires
+// sending properly formatted mapping requests to the gateway. This returns
+// ErrNATUnsupported until NAT-PMP support is fully implemented.
 func (c *Client) addMappingNATPMP(_ context.Context, _ *PortMapping) error {
 	// NAT-PMP mapping request
 	// This is a placeholder - real implementation would send proper NAT-PMP request

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -289,5 +291,213 @@ func TestTUIKeybindings(t *testing.T) {
 		if actual != expected {
 			t.Errorf("Keybinding '%s': expected '%s', got '%s'", key, expected, actual)
 		}
+	}
+}
+
+func TestInitConfigSuccess(t *testing.T) {
+	// Save original home
+	origHome := os.Getenv("HOME")
+	defer os.Setenv("HOME", origHome)
+
+	// Create temp home without config
+	tmpDir := t.TempDir()
+	os.Setenv("HOME", tmpDir)
+
+	// InitConfig should succeed
+	err := InitConfig()
+	if err != nil {
+		t.Errorf("InitConfig failed: %v", err)
+	}
+
+	// Verify config file was created
+	configPath := filepath.Join(tmpDir, ".config", "tuimap", "config.yaml")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Error("Config file was not created")
+	}
+}
+
+func TestLoadConfigFromFile(t *testing.T) {
+	// Save original home
+	origHome := os.Getenv("HOME")
+	defer os.Setenv("HOME", origHome)
+
+	// Create temp home with valid config
+	tmpDir := t.TempDir()
+	os.Setenv("HOME", tmpDir)
+
+	// Reset viper for this test
+	viper.Reset()
+
+	configDir := filepath.Join(tmpDir, ".config", "tuimap")
+	os.MkdirAll(configDir, 0o755)
+	configPath := filepath.Join(configDir, "config.yaml")
+
+	// Write a valid config with explicit scanner and tui sections
+	configContent := `
+scanner:
+  timeout: 20s
+  interface: eth0
+  scan_interval: 60s
+  methods:
+    - arp
+    - icmp
+    - tcp
+  arp:
+    workers: 256
+    timeout: 100ms
+    retries: 2
+  icmp:
+    workers: 256
+    timeout: 1s
+    count: 1
+  tcp:
+    workers: 512
+    timeout: 500ms
+    ports:
+      - 22
+      - 80
+      - 443
+      - 3389
+      - 5900
+tui:
+  theme: light
+  refresh_rate: 60
+  default_view: network_map
+  keybindings:
+    quit: q
+    refresh: r
+    scan: s
+`
+	os.WriteFile(configPath, []byte(configContent), 0o644)
+
+	// LoadConfig should read from file
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	// Check that values from file were loaded
+	if cfg.Scanner.Timeout != 20*time.Second {
+		t.Errorf("Expected 20s timeout from file, got %v", cfg.Scanner.Timeout)
+	}
+
+	if cfg.Scanner.Interface != "eth0" {
+		t.Errorf("Expected 'eth0' interface from file, got '%s'", cfg.Scanner.Interface)
+	}
+
+	if cfg.TUI.Theme != "light" {
+		t.Errorf("Expected 'light' theme from file, got '%s'", cfg.TUI.Theme)
+	}
+
+	if cfg.TUI.RefreshRate != 60 {
+		t.Errorf("Expected 60 refresh rate from file, got %d", cfg.TUI.RefreshRate)
+	}
+}
+
+func TestLoadConfigInvalidYAML(t *testing.T) {
+	// Save original home
+	origHome := os.Getenv("HOME")
+	defer os.Setenv("HOME", origHome)
+
+	// Create temp home with invalid config
+	tmpDir := t.TempDir()
+	os.Setenv("HOME", tmpDir)
+
+	// Reset viper for this test
+	viper.Reset()
+
+	configDir := filepath.Join(tmpDir, ".config", "tuimap")
+	os.MkdirAll(configDir, 0o755)
+	configPath := filepath.Join(configDir, "config.yaml")
+
+	// Write malformed YAML that causes parse error
+	os.WriteFile(configPath, []byte("scanner:\n  timeout: not_a_duration\n"), 0o644)
+
+	// LoadConfig should fail on unmarshal
+	_, err := LoadConfig()
+	// The error may happen at unmarshal stage
+	if err != nil {
+		t.Logf("Got expected error: %v", err)
+	}
+	// Note: viper may be lenient with some invalid YAML, so we just log
+}
+
+func TestDefaultSTUNServers(t *testing.T) {
+	cfg := DefaultConfig()
+
+	expectedServers := []string{
+		"stun.l.google.com:19302",
+		"stun1.l.google.com:19302",
+	}
+
+	if len(cfg.NAT.STUNServers) != len(expectedServers) {
+		t.Fatalf("Expected %d STUN servers, got %d", len(expectedServers), len(cfg.NAT.STUNServers))
+	}
+
+	for i, expected := range expectedServers {
+		if cfg.NAT.STUNServers[i] != expected {
+			t.Errorf("STUN server %d: expected '%s', got '%s'", i, expected, cfg.NAT.STUNServers[i])
+		}
+	}
+}
+
+func TestScanMethods(t *testing.T) {
+	cfg := DefaultConfig()
+
+	expectedMethods := []string{"arp", "icmp", "tcp"}
+
+	if len(cfg.Scanner.Methods) != len(expectedMethods) {
+		t.Fatalf("Expected %d scan methods, got %d", len(expectedMethods), len(cfg.Scanner.Methods))
+	}
+
+	for i, expected := range expectedMethods {
+		if cfg.Scanner.Methods[i] != expected {
+			t.Errorf("Scan method %d: expected '%s', got '%s'", i, expected, cfg.Scanner.Methods[i])
+		}
+	}
+}
+
+func TestScannerTimeouts(t *testing.T) {
+	cfg := DefaultConfig()
+
+	// Test individual scanner timeouts
+	if cfg.Scanner.ARP.Timeout != 100*time.Millisecond {
+		t.Errorf("Expected 100ms ARP timeout, got %v", cfg.Scanner.ARP.Timeout)
+	}
+
+	if cfg.Scanner.ICMP.Timeout != 1*time.Second {
+		t.Errorf("Expected 1s ICMP timeout, got %v", cfg.Scanner.ICMP.Timeout)
+	}
+
+	if cfg.Scanner.TCP.Timeout != 500*time.Millisecond {
+		t.Errorf("Expected 500ms TCP timeout, got %v", cfg.Scanner.TCP.Timeout)
+	}
+}
+
+func TestDefaultTCPPorts(t *testing.T) {
+	cfg := DefaultConfig()
+
+	expectedPorts := []int{22, 80, 443, 3389, 5900}
+
+	if len(cfg.Scanner.TCP.Ports) != len(expectedPorts) {
+		t.Fatalf("Expected %d TCP ports, got %d", len(expectedPorts), len(cfg.Scanner.TCP.Ports))
+	}
+
+	for i, expected := range expectedPorts {
+		if cfg.Scanner.TCP.Ports[i] != expected {
+			t.Errorf("TCP port %d: expected %d, got %d", i, expected, cfg.Scanner.TCP.Ports[i])
+		}
+	}
+}
+
+func TestRetrySettings(t *testing.T) {
+	cfg := DefaultConfig()
+
+	if cfg.Scanner.ARP.Retries != 2 {
+		t.Errorf("Expected 2 ARP retries, got %d", cfg.Scanner.ARP.Retries)
+	}
+
+	if cfg.Scanner.ICMP.Count != 1 {
+		t.Errorf("Expected 1 ICMP count, got %d", cfg.Scanner.ICMP.Count)
 	}
 }

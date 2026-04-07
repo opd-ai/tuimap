@@ -12,11 +12,13 @@ import (
 
 // Registry maintains the in-memory device state with thread-safe access.
 type Registry struct {
-	devices   map[string]*scanner.Device
-	mu        sync.RWMutex
-	alertChan chan Alert
-	rules     []AlertRule
-	offline   time.Duration
+	devices        map[string]*scanner.Device
+	mu             sync.RWMutex
+	alertChan      chan Alert
+	rules          []AlertRule
+	offline        time.Duration
+	droppedAlerts  uint64
+	droppedAlertMu sync.Mutex
 }
 
 // NewRegistry creates a new device registry.
@@ -122,12 +124,21 @@ func (r *Registry) triggerAlert(alertType AlertType, device scanner.Device, msg 
 		Severity:  getSeverity(alertType),
 	}
 
-	// Non-blocking send
+	// Non-blocking send with dropped alert tracking
 	select {
 	case r.alertChan <- alert:
 	default:
-		// Channel full, drop alert
+		r.droppedAlertMu.Lock()
+		r.droppedAlerts++
+		r.droppedAlertMu.Unlock()
 	}
+}
+
+// DroppedAlerts returns the number of alerts dropped due to full channel.
+func (r *Registry) DroppedAlerts() uint64 {
+	r.droppedAlertMu.Lock()
+	defer r.droppedAlertMu.Unlock()
+	return r.droppedAlerts
 }
 
 // getSeverity returns the default severity for an alert type.

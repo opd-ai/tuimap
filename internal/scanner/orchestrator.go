@@ -31,21 +31,15 @@ func (o *Orchestrator) AddScanner(s Scanner) {
 	o.scanners = append(o.scanners, s)
 }
 
-// Scan runs all configured scanners in parallel and merges results.
-func (o *Orchestrator) Scan(ctx context.Context, subnet string) (*ScanResult, error) {
-	startTime := time.Now()
+// scanOutput holds results from a single scanner.
+type scanOutput struct {
+	devices []Device
+	method  string
+	err     error
+}
 
-	// Create scan context with timeout
-	scanCtx, cancel := context.WithTimeout(ctx, o.timeout)
-	defer cancel()
-
-	// Run all scanners in parallel
-	type scanOutput struct {
-		devices []Device
-		method  string
-		err     error
-	}
-
+// runScannersParallel executes all scanners in parallel and returns results via channel.
+func (o *Orchestrator) runScannersParallel(ctx context.Context, subnet string) <-chan scanOutput {
 	results := make(chan scanOutput, len(o.scanners))
 	var wg sync.WaitGroup
 
@@ -53,7 +47,7 @@ func (o *Orchestrator) Scan(ctx context.Context, subnet string) (*ScanResult, er
 		wg.Add(1)
 		go func(s Scanner) {
 			defer wg.Done()
-			devices, err := s.Scan(scanCtx, subnet)
+			devices, err := s.Scan(ctx, subnet)
 			results <- scanOutput{
 				devices: devices,
 				method:  s.Name(),
@@ -62,13 +56,16 @@ func (o *Orchestrator) Scan(ctx context.Context, subnet string) (*ScanResult, er
 		}(scanner)
 	}
 
-	// Close results channel when all scanners complete
 	go func() {
 		wg.Wait()
 		close(results)
 	}()
 
-	// Collect and merge results
+	return results
+}
+
+// aggregateResults merges scanner outputs into a deduplicated device map.
+func aggregateResults(results <-chan scanOutput) (map[string]*Device, []error) {
 	deviceMap := make(map[string]*Device)
 	var scanErrors []error
 
@@ -82,7 +79,6 @@ func (o *Orchestrator) Scan(ctx context.Context, subnet string) (*ScanResult, er
 			key := deviceKey(&device)
 			existing, exists := deviceMap[key]
 			if exists {
-				// Merge device information
 				mergeDevices(existing, &device)
 			} else {
 				deviceCopy := device
@@ -91,13 +87,24 @@ func (o *Orchestrator) Scan(ctx context.Context, subnet string) (*ScanResult, er
 		}
 	}
 
-	// Convert map to slice
+	return deviceMap, scanErrors
+}
+
+// Scan runs all configured scanners in parallel and merges results.
+func (o *Orchestrator) Scan(ctx context.Context, subnet string) (*ScanResult, error) {
+	startTime := time.Now()
+
+	scanCtx, cancel := context.WithTimeout(ctx, o.timeout)
+	defer cancel()
+
+	results := o.runScannersParallel(scanCtx, subnet)
+	deviceMap, _ := aggregateResults(results)
+
 	devices := make([]Device, 0, len(deviceMap))
 	for _, device := range deviceMap {
 		devices = append(devices, *device)
 	}
 
-	// Build network metadata
 	networkInfo := o.buildNetworkMetadata(subnet)
 
 	return &ScanResult{
