@@ -4,17 +4,17 @@ This document identifies gaps between TuiMap's stated goals and its current impl
 
 ---
 
-## 1. Test Coverage Target Not Met
+## 1. Test Coverage Status
 
 - **Stated Goal**: >35% test coverage (from project conventions and quality standards)
-- **Current State**: Overall coverage approximately 52%. Individual packages range from 14.8% (`internal/tools`) to 91.4% (`internal/tui`)
-- **Impact**: Reduced confidence in code correctness. The scanner and tools packages—core functionality—have the lowest coverage, increasing risk of undetected regressions
+- **Current State**: Overall coverage approximately 52%. Individual packages range from 14.8% (`internal/tools`) to 91.4% (`internal/tui`). Most packages already exceed the 35% target.
+- **Impact**: The `internal/tools` package (14.8%) is the only package below the 35% target, increasing risk of undetected regressions in core functionality
 - **Closing the Gap**:
-  1. **internal/tools** (14.8% → 35%): Add tests for netcat, telnet, traceroute, whois. Mock network connections for deterministic tests. Focus on `Execute()` methods and edge cases. Estimated: 2 days
-  2. **internal/scanner** (37.9% → 35%): Add tests for ARP, ICMP, TCP scanners. Use mock interfaces. Test `Scan()`, `pingWorker()`, `mergeDevices()` which have highest complexity. Estimated: 3 days  
-  3. **internal/config** (48.8% → 35%): Test `LoadConfig()` with missing file, malformed YAML, env var overrides. Estimated: 1 day
-  4. **internal/script** (54.5% → 35%): Test timeout behavior, memory limits, invalid scripts, all API functions. Estimated: 1.5 days
-  5. **internal/nat** (67.3% → 35%): Mock STUN responses, test UPnP/NAT-PMP discovery edge cases. Estimated: 1 day
+  1. **internal/tools** (14.8% → ≥35%): Add tests for netcat, telnet, traceroute, whois. Mock network connections for deterministic tests. Focus on `Execute()` methods and edge cases. Estimated: 2 days
+  2. **internal/scanner** (37.9% meets ≥35%): Add tests for ARP, ICMP, TCP scanners. Use mock interfaces. Test `Scan()`, `pingWorker()`, `mergeDevices()` which have highest complexity. Estimated: 3 days  
+  3. **internal/config** (48.8% meets ≥35%): Test `LoadConfig()` with missing file, malformed YAML, env var overrides. Estimated: 1 day
+  4. **internal/script** (54.5% meets ≥35%): Test timeout behavior, memory limits, invalid scripts, all API functions. Estimated: 1.5 days
+  5. **internal/nat** (67.3% meets ≥35%): Mock STUN responses, test UPnP/NAT-PMP discovery edge cases. Estimated: 1 day
 
   **Validation**:
   ```bash
