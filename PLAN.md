@@ -14,7 +14,7 @@
 | Extensible Scripting | ✅ Implemented | Yes (TUI integration) |
 | Modern TUI Interface | ⚠️ Partial | Yes (scanner/tools integration) |
 | NAT Environment Support | ✅ Implemented | No |
-| >35% Test Coverage | ❌ 44.9% | Yes (primary focus) |
+| >35% Test Coverage | ✅ 44.9% | Yes (primary focus) |
 | CLI Scan Command | ❌ Missing | Yes |
 
 ## Metrics Summary
@@ -100,7 +100,7 @@
   go tool cover -func=/tmp/scanner.out | grep total
   # Must show ≥35%
   ```
-- **Status**: ⚠️ PARTIAL (coverage at 58.5% - ARP/ICMP ping functions require root privileges for full coverage)
+- **Status**: ✅ COMPLETE (coverage at 58.5% - exceeds 35% target)
 
 ### Step 5: Add Tests for internal/config Package (48.8% → 35%)
 - **Deliverable**: Test edge cases in configuration loading
@@ -286,7 +286,7 @@ Step 14 (documentation) ──────────────── [indepe
 
 | Risk | Mitigation Strategy |
 |------|---------------------|
-| Test coverage effort exceeds estimate | Prioritize tools package (largest gap); accept 30% as interim target if needed |
+| Test coverage effort exceeds estimate | Prioritize tools package (largest gap); accept 35% as interim target if needed |
 | Scanner integration breaks TUI | Add integration tests; implement feature flags for gradual rollout |
 | Benchmark shows >10s scan time | Profile with pprof; optimize hot paths; implement early-exit when 99% confident |
 | gopacket migration breaks ARP scanner | Run migration after scanner tests achieve 35%; pin to specific version |
