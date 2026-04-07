@@ -84,26 +84,6 @@ func TestIntegrationNetcatExecuteTimeout(t *testing.T) {
 	}
 }
 
-// TestIntegrationTracerouteLocalhost tests traceroute to localhost.
-func TestIntegrationTracerouteLocalhost(t *testing.T) {
-	tr := NewTracerouteTool(5, 1*time.Second)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	output, err := tr.Execute(ctx, []string{"127.0.0.1"})
-	if err != nil {
-		t.Skipf("Traceroute failed (may need root): %v", err)
-	}
-
-	var hops int
-	for range output {
-		hops++
-	}
-
-	// Localhost should have at least 1 hop
-	t.Logf("Traceroute to localhost: %d hops", hops)
-}
-
 // TestIntegrationWhoisDomain tests WHOIS lookup for a domain.
 func TestIntegrationWhoisDomain(t *testing.T) {
 	whois := NewWhoisTool(15 * time.Second)

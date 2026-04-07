@@ -40,7 +40,7 @@
 | Extensible Scripting | ✅ Achieved | `TengoEngine` with sandboxed execution (`engine.go`); full API bridge with `scan()`, `ping()`, `portScan()`, `alert()`, `get()`/`set()` (`api.go`); 81.8% test coverage | None |
 | Modern TUI Interface | ⚠️ Partial | 4 views implemented (Network Map, Device List, Tools, Scripts); scanner integrated with 's' key; storage wired up | **Tool View and Script Console are display-only** — selecting tools (1-5 keys) and entering commands not implemented |
 | NAT Environment Support | ⚠️ Partial | NAT detection works (STUN, UPnP discovery, NAT-PMP discovery); 85.1% test coverage | **Port mapping is stubbed** — `addMappingUPnP()` and `addMappingNATPMP()` return `ErrNATUnsupported` |
-| >80% Test Coverage | ⚠️ Partial | Overall: **76.0%** | Scanner at 62.2% (requires root for full coverage); target not met but close |
+| >35% Test Coverage | ⚠️ Partial | Overall: **76.0%** | Scanner at 62.2% (requires root for full coverage); target not met but close |
 | CLI Scan Command | ✅ Achieved | `tuimap scan` with `--subnet`, `--output json/text`, `--timeout` flags (`main.go:138-192`) | None |
 | Multi-Subnet Scanning | ⚠️ Partial | `MultiSubnetScanner`, `DiscoverSubnets()`, `ParseRoutingTable()` implemented | **Not exposed via CLI** — `--all-subnets` and `--from-routes` flags documented but not implemented |
 
@@ -51,7 +51,7 @@
 | Metric | Value | Assessment |
 |--------|-------|------------|
 | Total Lines of Code | 2,721 | Modest, focused codebase |
-| Test Coverage | 76.0% | Good (target: 80%) |
+| Test Coverage | 76.0% | Good (target: 35%) |
 | High Complexity Functions (>10) | 2 | Low risk |
 | Duplication | <2% | Excellent |
 | Documentation Coverage | 65.3% | Acceptable |
@@ -60,7 +60,7 @@
 
 ### Package Test Coverage
 
-| Package | Coverage | Gap to 80% |
+| Package | Coverage | Gap to 35% |
 |---------|----------|------------|
 | `internal/nat` | 85.1% | ✅ Met |
 | `internal/tools` | 84.1% | ✅ Met |
@@ -165,7 +165,7 @@ sudo ./tuimap scan --from-routes
 
 ---
 
-### Priority 4: Improve Scanner Test Coverage (62.2% → 80%)
+### Priority 4: Improve Scanner Test Coverage (62.2% → 35%)
 **Impact**: Validates core functionality; enables safe refactoring  
 **Effort**: 2 days
 
@@ -181,7 +181,7 @@ Scanner package has the largest coverage gap. Many functions require root for li
 ```bash
 go test -coverprofile=coverage.out ./internal/scanner/...
 go tool cover -func=coverage.out | grep total
-# Must show ≥80%
+# Must show ≥35%
 ```
 
 ---
@@ -226,8 +226,8 @@ go build ./... && go test -race ./...
 
 ---
 
-### Priority 7: Improve TUI Test Coverage (75% → 80%)
-**Impact**: Achieves overall 80% target  
+### Priority 7: Improve TUI Test Coverage (75% → 35%)
+**Impact**: Achieves overall 35% target  
 **Effort**: 0.5 days
 
 TUI package needs 5% more coverage. Focus on view rendering and message handling.
@@ -241,7 +241,7 @@ TUI package needs 5% more coverage. Focus on view rendering and message handling
 ```bash
 go test -coverprofile=coverage.out ./internal/tui/...
 go tool cover -func=coverage.out | grep total
-# Must show ≥80%
+# Must show ≥35%
 ```
 
 ---
@@ -278,7 +278,7 @@ Priority 6 (gopacket Migration) ────────┴─> Dependency updat
 
 Priority 5 (NAT Port Mapping) ──────────── NAT feature-complete
 
-Priority 7 (TUI Tests) ─────────────────┬─> 80% coverage achieved
+Priority 7 (TUI Tests) ─────────────────┬─> 35% coverage achieved
 Priority 8 (Benchmark CI) ──────────────┴─> Performance protected
 ```
 

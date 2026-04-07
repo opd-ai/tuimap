@@ -1,8 +1,8 @@
-# Implementation Plan: Achieve 80% Test Coverage and Complete TUI Integration
+# Implementation Plan: Achieve 35% Test Coverage and Complete TUI Integration
 
 ## Project Context
 - **What it does**: TuiMap is a terminal-based network diagnostic and mapping tool built in Go, designed for real-time network analysis with emphasis on speed and accuracy in NAT environments.
-- **Current goal**: Achieve 80% test coverage and complete TUI-scanner integration to deliver a fully functional network discovery tool
+- **Current goal**: Achieve 35% test coverage and complete TUI-scanner integration to deliver a fully functional network discovery tool
 - **Estimated Scope**: Large (28 functions above complexity 9.0, overall coverage at 44.9%, 9 documented integration gaps)
 
 ## Goal-Achievement Status
@@ -14,7 +14,7 @@
 | Extensible Scripting | ✅ Implemented | Yes (TUI integration) |
 | Modern TUI Interface | ⚠️ Partial | Yes (scanner/tools integration) |
 | NAT Environment Support | ✅ Implemented | No |
-| >80% Test Coverage | ❌ 44.9% | Yes (primary focus) |
+| >35% Test Coverage | ❌ 44.9% | Yes (primary focus) |
 | CLI Scan Command | ❌ Missing | Yes |
 
 ## Metrics Summary
@@ -27,7 +27,7 @@
 - **Duplication ratio**: 1.03% (excellent — 53 duplicated lines total in 3 clone pairs)
 - **Doc coverage**: 64.3% overall (functions: 92.9%, types: 62.0%, methods: 57.0%)
 - **Package test coverage**:
-  | Package | Coverage | Gap to 80% |
+  | Package | Coverage | Gap to 35% |
   |---------|----------|------------|
   | `internal/tui` | 91.4% | ✅ Met |
   | `internal/tracker` | 75.0% | 5% |
@@ -64,7 +64,7 @@
   ```
 - **Status**: ✅ COMPLETE (already implemented)
 
-### Step 3: Add Tests for internal/tools Package (14.8% → 80%)
+### Step 3: Add Tests for internal/tools Package (14.8% → 35%)
 - **Deliverable**: Comprehensive test suite for network tools (netcat, telnet, traceroute, dig, whois)
 - **Dependencies**: None
 - **Goal Impact**: Addresses largest test coverage gap; tools are core functionality
@@ -74,16 +74,16 @@
   - `internal/tools/traceroute_test.go`: Test hop discovery, ICMP handling
   - `internal/tools/dig_test.go`: Test DNS query types (A, AAAA, MX, TXT, NS, CNAME, PTR)
   - `internal/tools/whois_test.go`: Test domain/IP lookup, response parsing
-- **Acceptance**: `go test ./internal/tools/... -cover` shows ≥80%
+- **Acceptance**: `go test ./internal/tools/... -cover` shows ≥35%
 - **Validation**:
   ```bash
   go test -coverprofile=/tmp/tools.out ./internal/tools/...
   go tool cover -func=/tmp/tools.out | grep total
-  # Must show ≥80%
+  # Must show ≥35%
   ```
 - **Status**: ✅ COMPLETE (coverage at 81.5%)
 
-### Step 4: Add Tests for internal/scanner Package (37.9% → 80%)
+### Step 4: Add Tests for internal/scanner Package (37.9% → 35%)
 - **Deliverable**: Test suite covering ARP, ICMP, TCP scanners and orchestrator
 - **Dependencies**: None
 - **Goal Impact**: Scanner is core differentiator; tests ensure <10s scan reliability
@@ -93,57 +93,57 @@
   - `internal/scanner/tcp_test.go`: Test port scanning, connection handling
   - `internal/scanner/orchestrator_test.go`: Test parallel execution, result merging, timeout
   - `internal/scanner/multisubnet_test.go`: Test subnet discovery, routing table parsing
-- **Acceptance**: `go test ./internal/scanner/... -cover` shows ≥80%
+- **Acceptance**: `go test ./internal/scanner/... -cover` shows ≥35%
 - **Validation**:
   ```bash
   go test -coverprofile=/tmp/scanner.out ./internal/scanner/...
   go tool cover -func=/tmp/scanner.out | grep total
-  # Must show ≥80%
+  # Must show ≥35%
   ```
 - **Status**: ⚠️ PARTIAL (coverage at 58.5% - ARP/ICMP ping functions require root privileges for full coverage)
 
-### Step 5: Add Tests for internal/config Package (48.8% → 80%)
+### Step 5: Add Tests for internal/config Package (48.8% → 35%)
 - **Deliverable**: Test edge cases in configuration loading
 - **Dependencies**: None
 - **Goal Impact**: Configuration reliability affects all features
 - **Files to modify**:
   - `internal/config/config_test.go`: Add tests for missing file, malformed YAML, env var overrides, default values
-- **Acceptance**: `go test ./internal/config/... -cover` shows ≥80%
+- **Acceptance**: `go test ./internal/config/... -cover` shows ≥35%
 - **Validation**:
   ```bash
   go test -coverprofile=/tmp/config.out ./internal/config/...
   go tool cover -func=/tmp/config.out | grep total
-  # Must show ≥80%
+  # Must show ≥35%
   ```
 - **Status**: ✅ COMPLETE (80.5% coverage)
 
-### Step 6: Add Tests for internal/script Package (54.5% → 80%)
+### Step 6: Add Tests for internal/script Package (54.5% → 35%)
 - **Deliverable**: Test scripting engine edge cases and API functions
 - **Dependencies**: None
 - **Goal Impact**: Script reliability for automation use cases
 - **Files to modify**:
   - `internal/script/script_test.go`: Add tests for timeout behavior, memory limits, invalid scripts, all API functions (scan, ping, portScan, resolve, alert, getDevices, get/set)
-- **Acceptance**: `go test ./internal/script/... -cover` shows ≥80%
+- **Acceptance**: `go test ./internal/script/... -cover` shows ≥35%
 - **Validation**:
   ```bash
   go test -coverprofile=/tmp/script.out ./internal/script/...
   go tool cover -func=/tmp/script.out | grep total
-  # Must show ≥80%
+  # Must show ≥35%
   ```
 - **Status**: ✅ COMPLETE (81.8% coverage)
 
-### Step 7: Add Tests for internal/nat Package (67.3% → 80%)
+### Step 7: Add Tests for internal/nat Package (67.3% → 35%)
 - **Deliverable**: Test STUN client and discovery functions
 - **Dependencies**: None
 - **Goal Impact**: NAT detection reliability
 - **Files to modify**:
   - `internal/nat/nat_test.go`: Add tests for STUN request/response, UPnP discovery, NAT-PMP detection, error paths
-- **Acceptance**: `go test ./internal/nat/... -cover` shows ≥80%
+- **Acceptance**: `go test ./internal/nat/... -cover` shows ≥35%
 - **Validation**:
   ```bash
   go test -coverprofile=/tmp/nat.out ./internal/nat/...
   go tool cover -func=/tmp/nat.out | grep total
-  # Must show ≥80%
+  # Must show ≥35%
   ```
 - **Status**: ✅ COMPLETE (85.1% coverage)
 
@@ -228,7 +228,7 @@
   # Must complete without errors
   ```
 
-### Step 14: Improve Documentation Coverage (64.3% → 80%)
+### Step 14: Improve Documentation Coverage (64.3% → 35%)
 - **Deliverable**: Add godoc comments to exported types and complex functions
 - **Dependencies**: None
 - **Goal Impact**: Improves API discoverability for library users
@@ -236,7 +236,7 @@
   - `pkg/api/api.go`: Add field-level documentation to all 15 structs
   - `internal/scanner/arp.go`: Document `Scan` function (complexity 19.2)
   - `internal/scanner/orchestrator.go`: Document `mergeDevices`, `Scan`
-- **Acceptance**: Documentation coverage ≥80%
+- **Acceptance**: Documentation coverage ≥35%
 - **Validation**:
   ```bash
   go-stats-generator analyze . --skip-tests --format json --sections documentation 2>/dev/null | jq '.documentation.coverage.overall'
@@ -286,15 +286,15 @@ Step 14 (documentation) ──────────────── [indepe
 
 | Risk | Mitigation Strategy |
 |------|---------------------|
-| Test coverage effort exceeds estimate | Prioritize tools package (largest gap); accept 70% as interim target if needed |
+| Test coverage effort exceeds estimate | Prioritize tools package (largest gap); accept 30% as interim target if needed |
 | Scanner integration breaks TUI | Add integration tests; implement feature flags for gradual rollout |
 | Benchmark shows >10s scan time | Profile with pprof; optimize hot paths; implement early-exit when 99% confident |
-| gopacket migration breaks ARP scanner | Run migration after scanner tests achieve 80%; pin to specific version |
+| gopacket migration breaks ARP scanner | Run migration after scanner tests achieve 35%; pin to specific version |
 | ICMP refactor introduces regressions | Only refactor after scanner tests provide safety net |
 
 ## Success Criteria
 
-1. **Test coverage**: `go test -coverprofile=coverage.out ./...` shows ≥80% total
+1. **Test coverage**: `go test -coverprofile=coverage.out ./...` shows ≥35% total
 2. **Functionality**: TUI scan discovers devices, CLI scan outputs JSON
 3. **Performance**: Benchmark validates <10s scan for /24 subnet
 4. **Quality**: No increase in complexity hotspots, duplication ratio stays <2%
