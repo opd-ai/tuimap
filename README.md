@@ -165,5 +165,5 @@ Built with:
 - [Bubble Tea](https://github.com/charmbracelet/bubbletea) - TUI framework
 - [Cobra](https://github.com/spf13/cobra) - CLI framework
 - [Viper](https://github.com/spf13/viper) - Configuration management
-- [Tengo](https://github.com/d5/tengo) - Embedded scripting (coming soon)
-- [gopacket](https://github.com/google/gopacket) - Packet capture (coming soon)
+- [Tengo](https://github.com/d5/tengo) - Embedded scripting
+- [gopacket](https://github.com/gopacket/gopacket) - Packet capture

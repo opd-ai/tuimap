@@ -9,7 +9,7 @@ Target users include network administrators, security professionals, and develop
 - **Primary Language**: Go (version not specified, modern Go assumed with modules support)
 - **TUI Framework**: Bubble Tea (charmbracelet/bubbletea) for terminal user interface with lipgloss for styling
 - **Networking Libraries**: 
-  - gopacket (github.com/google/gopacket) for packet capture and analysis
+  - gopacket (github.com/gopacket/gopacket) for packet capture and analysis
   - golang.org/x/net/icmp for ICMP protocol implementation
   - gateway (github.com/jackpal/gateway) for gateway detection
 - **Scripting Engine**: d5/tengo (github.com/d5/tengo/v2) for embedded scripting with sandboxed execution

@@ -144,24 +144,17 @@ Results can be output as JSON or text format.
 Examples:
   tuimap scan                          # Scan auto-detected subnet
   tuimap scan --subnet 192.168.1.0/24  # Scan specific subnet
-  tuimap scan --output json            # Output as JSON`,
+  tuimap scan --output json            # Output as JSON
+  tuimap scan --all-subnets            # Scan all discovered subnets
+  tuimap scan --from-routes            # Scan subnets from routing table`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Get flags
 		subnet, _ := cmd.Flags().GetString("subnet")
 		ifaceName, _ := cmd.Flags().GetString("interface")
 		outputFormat, _ := cmd.Flags().GetString("output")
 		timeoutSec, _ := cmd.Flags().GetInt("timeout")
-
-		// Auto-detect subnet if not specified
-		if subnet == "" {
-			var err error
-			subnet, err = scanner.DetectSubnet()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error detecting subnet: %v\n", err)
-				fmt.Fprintf(os.Stderr, "Please specify --subnet manually\n")
-				os.Exit(1)
-			}
-		}
+		allSubnets, _ := cmd.Flags().GetBool("all-subnets")
+		fromRoutes, _ := cmd.Flags().GetBool("from-routes")
 
 		// Create orchestrator
 		orch, err := scanner.CreateDefaultOrchestrator(ifaceName)
@@ -170,11 +163,49 @@ Examples:
 			os.Exit(1)
 		}
 
-		// Run scan
 		timeout := time.Duration(timeoutSec) * time.Second
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
+		// Handle multi-subnet scanning modes
+		if allSubnets || fromRoutes {
+			multiScanner := scanner.NewMultiSubnetScanner(orch)
+			var result *scanner.MultiSubnetScanResult
+
+			if fromRoutes {
+				fmt.Fprintf(os.Stderr, "Scanning subnets from routing table...\n")
+				result, err = multiScanner.ScanFromRoutingTable(ctx)
+			} else {
+				fmt.Fprintf(os.Stderr, "Discovering and scanning all subnets...\n")
+				result, err = multiScanner.ScanAllSubnets(ctx)
+			}
+
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error scanning: %v\n", err)
+				os.Exit(1)
+			}
+
+			// Output multi-subnet results
+			if outputFormat == "json" {
+				outputMultiSubnetJSON(result)
+			} else {
+				outputMultiSubnetText(result)
+			}
+			return
+		}
+
+		// Single subnet scan (original behavior)
+		// Auto-detect subnet if not specified
+		if subnet == "" {
+			subnet, err = scanner.DetectSubnet()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error detecting subnet: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Please specify --subnet manually\n")
+				os.Exit(1)
+			}
+		}
+
+		// Run scan
 		fmt.Fprintf(os.Stderr, "Scanning %s...\n", subnet)
 		result, err := orch.Scan(ctx, subnet)
 		if err != nil {
@@ -249,6 +280,101 @@ func outputScanText(result *scanner.ScanResult) {
 	}
 }
 
+// outputMultiSubnetJSON outputs multi-subnet scan results as JSON.
+func outputMultiSubnetJSON(result *scanner.MultiSubnetScanResult) {
+	type deviceJSON struct {
+		IP       string `json:"ip"`
+		MAC      string `json:"mac,omitempty"`
+		Hostname string `json:"hostname,omitempty"`
+		Vendor   string `json:"vendor,omitempty"`
+		Status   string `json:"status"`
+		Ports    []int  `json:"ports,omitempty"`
+	}
+
+	type subnetResultJSON struct {
+		Subnet    string       `json:"subnet"`
+		Interface string       `json:"interface,omitempty"`
+		Devices   []deviceJSON `json:"devices"`
+	}
+
+	type outputJSON struct {
+		TotalDevices int                `json:"total_devices"`
+		TotalTime    string             `json:"total_time"`
+		Subnets      []subnetResultJSON `json:"subnets"`
+	}
+
+	output := outputJSON{
+		TotalDevices: len(result.AllDevices),
+		TotalTime:    result.TotalTime.Round(time.Millisecond).String(),
+		Subnets:      make([]subnetResultJSON, 0, len(result.Subnets)),
+	}
+
+	for _, subnet := range result.Subnets {
+		scanResult := result.Results[subnet.Subnet]
+		if scanResult == nil {
+			continue
+		}
+
+		subnetResult := subnetResultJSON{
+			Subnet:    subnet.Subnet,
+			Interface: subnet.Interface,
+			Devices:   make([]deviceJSON, len(scanResult.Devices)),
+		}
+
+		for i, d := range scanResult.Devices {
+			mac := ""
+			if d.MAC != nil {
+				mac = d.MAC.String()
+			}
+			subnetResult.Devices[i] = deviceJSON{
+				IP:       d.IP.String(),
+				MAC:      mac,
+				Hostname: d.Hostname,
+				Vendor:   d.Vendor,
+				Status:   string(d.Status),
+				Ports:    d.Ports,
+			}
+		}
+
+		output.Subnets = append(output.Subnets, subnetResult)
+	}
+
+	jsonOutput, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error marshaling JSON: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(string(jsonOutput))
+}
+
+// outputMultiSubnetText outputs multi-subnet scan results as formatted text.
+func outputMultiSubnetText(result *scanner.MultiSubnetScanResult) {
+	fmt.Printf("\nMulti-Subnet Scan completed in %v\n", result.TotalTime.Round(time.Millisecond))
+	fmt.Printf("Scanned %d subnets, found %d total devices:\n", len(result.Subnets), len(result.AllDevices))
+
+	for _, subnet := range result.Subnets {
+		scanResult := result.Results[subnet.Subnet]
+		if scanResult == nil {
+			fmt.Printf("\n━━━ %s (failed) ━━━\n", subnet.Subnet)
+			continue
+		}
+
+		fmt.Printf("\n━━━ %s [%s] ━━━\n", subnet.Subnet, subnet.Interface)
+		fmt.Printf("    Found %d devices in %v\n", len(scanResult.Devices), scanResult.ScanTime.Round(time.Millisecond))
+
+		for _, d := range scanResult.Devices {
+			mac := "unknown"
+			if d.MAC != nil {
+				mac = d.MAC.String()
+			}
+			fmt.Printf("      IP: %-15s  MAC: %-17s  Status: %s\n", d.IP, mac, d.Status)
+			if d.Hostname != "" {
+				fmt.Printf("          Hostname: %s\n", d.Hostname)
+			}
+		}
+	}
+}
+
 func init() {
 	// Add subcommands
 	rootCmd.AddCommand(versionCmd)
@@ -262,6 +388,8 @@ func init() {
 	scanCmd.Flags().StringP("subnet", "s", "", "subnet to scan (e.g., 192.168.1.0/24)")
 	scanCmd.Flags().StringP("output", "o", "text", "output format: text or json")
 	scanCmd.Flags().IntP("timeout", "t", 15, "scan timeout in seconds")
+	scanCmd.Flags().Bool("all-subnets", false, "discover and scan all local subnets")
+	scanCmd.Flags().Bool("from-routes", false, "scan subnets from the system routing table")
 
 	// Global flags
 	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default is $HOME/.config/tuimap/config.yaml)")

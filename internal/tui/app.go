@@ -4,13 +4,19 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/opd-ai/tuimap/internal/scanner"
+	"github.com/opd-ai/tuimap/internal/script"
+	"github.com/opd-ai/tuimap/internal/tools"
 	"github.com/opd-ai/tuimap/internal/tracker"
 )
 
@@ -27,6 +33,18 @@ const (
 // scanResultMsg is sent when a scan completes.
 type scanResultMsg struct {
 	result *scanner.ScanResult
+	err    error
+}
+
+// toolResultMsg is sent when tool execution produces output.
+type toolResultMsg struct {
+	output string
+	done   bool
+}
+
+// scriptResultMsg is sent when script execution produces output.
+type scriptResultMsg struct {
+	output string
 	err    error
 }
 
@@ -47,6 +65,24 @@ type Model struct {
 	subnet       string
 	scanning     bool
 	storage      *tracker.Storage
+
+	// Tool View state
+	selectedTool   int
+	toolInput      textinput.Model
+	toolOutput     viewport.Model
+	toolOutputText string
+	toolRunning    bool
+	tools          []tools.NetworkTool
+	toolFocused    bool // true when text input is focused
+
+	// Script Console state
+	scriptEngine     *script.TengoEngine
+	scriptInput      textinput.Model
+	scriptOutput     viewport.Model
+	scriptOutputText string
+	scriptRunning    bool
+	scriptFocused    bool
+	scriptsDir       string
 }
 
 // Styles holds the lipgloss styles for the TUI.
@@ -133,16 +169,65 @@ func NewModelWithOrchestratorAndStorage(orch *scanner.Orchestrator, subnet strin
 		Bold(false)
 	t.SetStyles(s)
 
+	// Initialize tool input
+	ti := textinput.New()
+	ti.Placeholder = "Enter arguments..."
+	ti.CharLimit = 256
+	ti.Width = 50
+
+	// Initialize tool output viewport
+	vp := viewport.New(60, 10)
+	vp.SetContent("Tool output will appear here.")
+
+	// Initialize network tools
+	timeout := 10 * time.Second
+	networkTools := []tools.NetworkTool{
+		tools.NewNetcatTool(timeout),
+		tools.NewTelnetTool(timeout),
+		tools.NewTracerouteTool(30, timeout),
+		tools.NewDigTool(timeout, ""),
+		tools.NewWhoisTool(timeout),
+	}
+
+	// Initialize script console input
+	si := textinput.New()
+	si.Placeholder = ":load <script>, :list, :stop"
+	si.CharLimit = 256
+	si.Width = 50
+
+	// Initialize script output viewport
+	svp := viewport.New(60, 10)
+	svp.SetContent("Script output will appear here.")
+
+	// Initialize script engine
+	engine := script.NewTengoEngine(30*time.Second, 50)
+
+	// Get scripts directory
+	homeDir, _ := os.UserHomeDir()
+	scriptsDir := filepath.Join(homeDir, ".config", "tuimap", "scripts")
+
 	return Model{
-		currentView:  ViewDeviceList,
-		table:        t,
-		styles:       NewStyles(),
-		devices:      make([]scanner.Device, 0),
-		alerts:       make([]tracker.Alert, 0),
-		status:       "Ready - Press 's' to scan",
-		orchestrator: orch,
-		subnet:       subnet,
-		storage:      storage,
+		currentView:      ViewDeviceList,
+		table:            t,
+		styles:           NewStyles(),
+		devices:          make([]scanner.Device, 0),
+		alerts:           make([]tracker.Alert, 0),
+		status:           "Ready - Press 's' to scan",
+		orchestrator:     orch,
+		subnet:           subnet,
+		storage:          storage,
+		selectedTool:     -1,
+		toolInput:        ti,
+		toolOutput:       vp,
+		toolOutputText:   "",
+		tools:            networkTools,
+		toolFocused:      false,
+		scriptEngine:     engine,
+		scriptInput:      si,
+		scriptOutput:     svp,
+		scriptOutputText: "",
+		scriptFocused:    false,
+		scriptsDir:       scriptsDir,
 	}
 }
 
@@ -153,8 +238,19 @@ func (m Model) Init() tea.Cmd {
 
 // Update handles messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Handle Tool View specific inputs first
+		if m.currentView == ViewToolView {
+			return m.updateToolView(msg)
+		}
+		// Handle Script Console specific inputs
+		if m.currentView == ViewScriptConsole {
+			return m.updateScriptConsole(msg)
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -166,10 +262,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "Device List View"
 		case "3":
 			m.currentView = ViewToolView
-			m.status = "Tool View"
+			m.status = "Tool View - Select a tool (5-9)"
 		case "4":
 			m.currentView = ViewScriptConsole
-			m.status = "Script Console View"
+			m.status = "Script Console - Enter command"
+			m.scriptFocused = true
+			m.scriptInput.Focus()
 		case "s":
 			if !m.scanning && m.orchestrator != nil && m.subnet != "" {
 				m.scanning = true
@@ -192,6 +290,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+	case toolResultMsg:
+		m.toolOutputText += msg.output
+		m.toolOutput.SetContent(m.toolOutputText)
+		m.toolOutput.GotoBottom()
+		if msg.done {
+			m.toolRunning = false
+			m.status = "Tool execution completed"
+		}
+		return m, nil
+
+	case scriptResultMsg:
+		m.scriptRunning = false
+		if msg.err != nil {
+			m.scriptOutputText += fmt.Sprintf("Error: %v\n", msg.err)
+		} else if msg.output != "" {
+			m.scriptOutputText += msg.output
+		} else {
+			m.scriptOutputText += "Script completed successfully.\n"
+		}
+		m.scriptOutput.SetContent(m.scriptOutputText)
+		m.scriptOutput.GotoBottom()
+		m.status = "Script execution completed"
+		return m, nil
+
 	case scanResultMsg:
 		m.scanning = false
 		if msg.err != nil {
@@ -208,10 +330,250 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.table.SetWidth(m.width - 4)
 		m.table.SetHeight(m.height - 10)
+		m.toolOutput.Width = m.width - 8
+		m.toolOutput.Height = m.height - 18
+		m.toolInput.Width = m.width - 20
+		m.scriptOutput.Width = m.width - 8
+		m.scriptOutput.Height = m.height - 18
+		m.scriptInput.Width = m.width - 20
 		m.ready = true
 	}
 
+	return m, tea.Batch(cmds...)
+}
+
+// updateToolView handles input for the Tool View.
+func (m Model) updateToolView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+
+	// If text input is focused, handle input
+	if m.toolFocused {
+		switch key {
+		case "esc":
+			m.toolFocused = false
+			m.toolInput.Blur()
+			m.status = "Tool View - Select a tool (1-5)"
+			return m, nil
+		case "enter":
+			if !m.toolRunning && m.selectedTool >= 0 {
+				return m.executeSelectedTool()
+			}
+			return m, nil
+		}
+
+		var cmd tea.Cmd
+		m.toolInput, cmd = m.toolInput.Update(msg)
+		return m, cmd
+	}
+
+	// Handle tool selection and global keys
+	switch key {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "1", "2", "3", "4":
+		// View switching
+		viewNum := int(key[0] - '1')
+		m.currentView = ViewType(viewNum)
+		m.status = []string{"Network Map View", "Device List View", "Tool View", "Script Console View"}[viewNum]
+		return m, nil
+	case "5", "6", "7", "8", "9":
+		// Tool selection (when in tool view, 5-9 selects tools)
+		toolNum := int(key[0] - '5')
+		if toolNum < len(m.tools) {
+			m.selectedTool = toolNum
+			m.toolFocused = true
+			m.toolInput.Focus()
+			m.toolInput.SetValue("")
+			m.status = fmt.Sprintf("Selected: %s - Enter arguments", m.tools[toolNum].Name())
+		}
+		return m, nil
+	case "enter":
+		// Enter focuses input if tool is selected
+		if m.selectedTool >= 0 && !m.toolFocused {
+			m.toolFocused = true
+			m.toolInput.Focus()
+			return m, nil
+		}
+	case "c":
+		// Clear output
+		m.toolOutputText = ""
+		m.toolOutput.SetContent("Tool output will appear here.")
+		return m, nil
+	}
+
 	return m, nil
+}
+
+// updateScriptConsole handles input for the Script Console view.
+func (m Model) updateScriptConsole(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+
+	// Handle global keys
+	switch key {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		m.scriptFocused = false
+		m.scriptInput.Blur()
+		m.status = "Script Console View"
+		return m, nil
+	}
+
+	// If input is focused
+	if m.scriptFocused {
+		switch key {
+		case "enter":
+			return m.executeScriptCommand()
+		}
+
+		var cmd tea.Cmd
+		m.scriptInput, cmd = m.scriptInput.Update(msg)
+		return m, cmd
+	}
+
+	// Handle view switching if not focused
+	switch key {
+	case "q":
+		return m, tea.Quit
+	case "1", "2", "3", "4":
+		viewNum := int(key[0] - '1')
+		m.currentView = ViewType(viewNum)
+		m.status = []string{"Network Map View", "Device List View", "Tool View", "Script Console View"}[viewNum]
+		return m, nil
+	case "enter":
+		m.scriptFocused = true
+		m.scriptInput.Focus()
+		return m, nil
+	case "c":
+		m.scriptOutputText = ""
+		m.scriptOutput.SetContent("Script output will appear here.")
+		return m, nil
+	}
+
+	return m, nil
+}
+
+// executeScriptCommand parses and executes script console commands.
+func (m Model) executeScriptCommand() (tea.Model, tea.Cmd) {
+	input := strings.TrimSpace(m.scriptInput.Value())
+	m.scriptInput.SetValue("")
+
+	if input == "" {
+		return m, nil
+	}
+
+	m.scriptOutputText += fmt.Sprintf("> %s\n", input)
+	m.scriptOutput.SetContent(m.scriptOutputText)
+
+	// Parse command
+	if strings.HasPrefix(input, ":") {
+		parts := strings.Fields(input)
+		cmd := parts[0]
+
+		switch cmd {
+		case ":list":
+			return m.listScripts()
+		case ":load":
+			if len(parts) < 2 {
+				m.scriptOutputText += "Usage: :load <script.tengo>\n"
+				m.scriptOutput.SetContent(m.scriptOutputText)
+				return m, nil
+			}
+			return m.loadScript(parts[1])
+		case ":stop":
+			if m.scriptRunning {
+				m.scriptEngine.Stop()
+				m.scriptOutputText += "Script stopped.\n"
+			} else {
+				m.scriptOutputText += "No script is running.\n"
+			}
+			m.scriptOutput.SetContent(m.scriptOutputText)
+			return m, nil
+		case ":help":
+			m.scriptOutputText += "Commands:\n"
+			m.scriptOutputText += "  :list           - List available scripts\n"
+			m.scriptOutputText += "  :load <file>    - Load and run a script\n"
+			m.scriptOutputText += "  :stop           - Stop running script\n"
+			m.scriptOutputText += "  :help           - Show this help\n"
+			m.scriptOutput.SetContent(m.scriptOutputText)
+			return m, nil
+		default:
+			m.scriptOutputText += fmt.Sprintf("Unknown command: %s\n", cmd)
+			m.scriptOutput.SetContent(m.scriptOutputText)
+			return m, nil
+		}
+	}
+
+	// Run as inline script
+	m.scriptRunning = true
+	m.status = "Running script..."
+	return m, m.runScript(input)
+}
+
+// listScripts lists available scripts in the scripts directory.
+func (m Model) listScripts() (tea.Model, tea.Cmd) {
+	entries, err := os.ReadDir(m.scriptsDir)
+	if err != nil {
+		m.scriptOutputText += fmt.Sprintf("Cannot read scripts directory: %v\n", err)
+		m.scriptOutputText += fmt.Sprintf("Directory: %s\n", m.scriptsDir)
+		m.scriptOutput.SetContent(m.scriptOutputText)
+		return m, nil
+	}
+
+	if len(entries) == 0 {
+		m.scriptOutputText += "No scripts found.\n"
+		m.scriptOutputText += fmt.Sprintf("Directory: %s\n", m.scriptsDir)
+		m.scriptOutput.SetContent(m.scriptOutputText)
+		return m, nil
+	}
+
+	m.scriptOutputText += "Available scripts:\n"
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".tengo") {
+			m.scriptOutputText += fmt.Sprintf("  %s\n", entry.Name())
+		}
+	}
+	m.scriptOutput.SetContent(m.scriptOutputText)
+	return m, nil
+}
+
+// loadScript loads and runs a script file.
+func (m Model) loadScript(filename string) (tea.Model, tea.Cmd) {
+	scriptPath := filepath.Join(m.scriptsDir, filename)
+
+	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
+		m.scriptOutputText += fmt.Sprintf("Script not found: %s\n", filename)
+		m.scriptOutput.SetContent(m.scriptOutputText)
+		return m, nil
+	}
+
+	m.scriptRunning = true
+	m.status = fmt.Sprintf("Running script: %s", filename)
+	return m, m.runScriptFile(scriptPath)
+}
+
+// runScript runs an inline script.
+func (m Model) runScript(source string) tea.Cmd {
+	engine := m.scriptEngine
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		err := engine.Run(ctx, source)
+		return scriptResultMsg{output: "", err: err}
+	}
+}
+
+// runScriptFile runs a script from a file.
+func (m Model) runScriptFile(path string) tea.Cmd {
+	engine := m.scriptEngine
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		err := engine.LoadFile(ctx, path)
+		return scriptResultMsg{output: "", err: err}
+	}
 }
 
 // View renders the TUI.
@@ -310,16 +672,46 @@ func (m Model) renderDeviceList() string {
 
 // renderToolView renders the tool view.
 func (m Model) renderToolView() string {
-	tools := []string{"netcat", "telnet", "traceroute", "dig", "whois"}
-
 	var builder strings.Builder
 	builder.WriteString("Available Network Tools:\n\n")
 
-	for i, tool := range tools {
-		builder.WriteString(fmt.Sprintf("  [%d] %s\n", i+1, tool))
+	toolNames := []string{"netcat", "telnet", "traceroute", "dig", "whois"}
+	for i, name := range toolNames {
+		prefix := "  "
+		if i == m.selectedTool {
+			prefix = "▶ "
+			name = m.styles.Active.Render(fmt.Sprintf("[%d] %s", i+5, name))
+		} else {
+			name = fmt.Sprintf("[%d] %s", i+5, name)
+		}
+		builder.WriteString(prefix + name + "\n")
 	}
 
-	builder.WriteString("\nPress number to select tool, then enter command arguments.")
+	builder.WriteString("\n")
+
+	// Show input field if tool is selected
+	if m.selectedTool >= 0 {
+		builder.WriteString(fmt.Sprintf("Tool: %s\n", m.tools[m.selectedTool].Name()))
+		builder.WriteString("Args: ")
+		builder.WriteString(m.toolInput.View())
+		builder.WriteString("\n\n")
+	}
+
+	// Show output area
+	builder.WriteString("Output:\n")
+	builder.WriteString("─────────────────────────────────────────────\n")
+	if m.toolOutputText != "" {
+		builder.WriteString(m.toolOutput.View())
+	} else {
+		builder.WriteString("Tool output will appear here.\n")
+	}
+	builder.WriteString("\n─────────────────────────────────────────────\n")
+
+	if m.toolRunning {
+		builder.WriteString("\n[Running...] Press Esc to cancel")
+	} else {
+		builder.WriteString("\nPress 5-9 to select tool | Enter to run | c to clear | Esc to cancel")
+	}
 
 	return m.styles.Border.Width(m.width - 4).Render(builder.String())
 }
@@ -328,12 +720,28 @@ func (m Model) renderToolView() string {
 func (m Model) renderScriptConsole() string {
 	var builder strings.Builder
 	builder.WriteString("Script Console (Tengo):\n\n")
-	builder.WriteString("Scripts directory: ~/.config/tuimap/scripts\n\n")
-	builder.WriteString("Available commands:\n")
-	builder.WriteString("  :load <script.tengo>  - Load and run a script\n")
-	builder.WriteString("  :list                 - List available scripts\n")
-	builder.WriteString("  :stop                 - Stop running script\n\n")
-	builder.WriteString("> _")
+	builder.WriteString(fmt.Sprintf("Scripts directory: %s\n\n", m.scriptsDir))
+
+	// Show input
+	builder.WriteString("> ")
+	builder.WriteString(m.scriptInput.View())
+	builder.WriteString("\n\n")
+
+	// Show output area
+	builder.WriteString("Output:\n")
+	builder.WriteString("─────────────────────────────────────────────\n")
+	if m.scriptOutputText != "" {
+		builder.WriteString(m.scriptOutput.View())
+	} else {
+		builder.WriteString("Script output will appear here.\n")
+	}
+	builder.WriteString("\n─────────────────────────────────────────────\n")
+
+	if m.scriptRunning {
+		builder.WriteString("\n[Running...] :stop to cancel")
+	} else {
+		builder.WriteString("\n:list | :load <file> | :stop | :help | c to clear | Esc to unfocus")
+	}
 
 	return m.styles.Border.Width(m.width - 4).Render(builder.String())
 }
@@ -413,6 +821,53 @@ func (m Model) startScan() tea.Cmd {
 
 		result, err := m.orchestrator.Scan(ctx, m.subnet)
 		return scanResultMsg{result: result, err: err}
+	}
+}
+
+// executeSelectedTool runs the selected tool with provided arguments.
+func (m Model) executeSelectedTool() (tea.Model, tea.Cmd) {
+	if m.selectedTool < 0 || m.selectedTool >= len(m.tools) {
+		m.status = "No tool selected"
+		return m, nil
+	}
+
+	args := strings.Fields(m.toolInput.Value())
+	tool := m.tools[m.selectedTool]
+
+	// Validate args
+	if err := tool.Validate(args); err != nil {
+		m.toolOutputText += fmt.Sprintf("Error: %v\n", err)
+		m.toolOutput.SetContent(m.toolOutputText)
+		return m, nil
+	}
+
+	m.toolRunning = true
+	m.toolOutputText += fmt.Sprintf(">>> %s %s\n", tool.Name(), strings.Join(args, " "))
+	m.toolOutput.SetContent(m.toolOutputText)
+	m.status = fmt.Sprintf("Running %s...", tool.Name())
+	m.toolFocused = false
+	m.toolInput.Blur()
+
+	return m, m.runTool(tool, args)
+}
+
+// runTool returns a command that executes the tool asynchronously.
+func (m Model) runTool(tool tools.NetworkTool, args []string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		outputChan, err := tool.Execute(ctx, args)
+		if err != nil {
+			return toolResultMsg{output: fmt.Sprintf("Error: %v\n", err), done: true}
+		}
+
+		var result strings.Builder
+		for line := range outputChan {
+			result.WriteString(line)
+		}
+
+		return toolResultMsg{output: result.String(), done: true}
 	}
 }
 

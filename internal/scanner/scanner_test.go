@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"bytes"
 	"context"
 	"net"
 	"testing"
@@ -1262,4 +1263,224 @@ func TestScanFromRoutingTable(t *testing.T) {
 	// Just check it doesn't panic - may timeout or have no subnets
 	_ = result
 	_ = err
+}
+
+// TestMergeDevicesDuplicateIPs tests merging devices with same IP.
+func TestMergeDevicesDuplicateIPs(t *testing.T) {
+	ip := net.ParseIP("192.168.1.100")
+	mac1 := net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
+	mac2 := net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}
+
+	tests := []struct {
+		name     string
+		dst      *Device
+		src      *Device
+		expected net.HardwareAddr
+	}{
+		{
+			name:     "Both have MACs - dst preserved",
+			dst:      &Device{IP: ip, MAC: mac1},
+			src:      &Device{IP: ip, MAC: mac2},
+			expected: mac1,
+		},
+		{
+			name:     "Only src has MAC",
+			dst:      &Device{IP: ip, MAC: nil},
+			src:      &Device{IP: ip, MAC: mac2},
+			expected: mac2,
+		},
+		{
+			name:     "Neither has MAC",
+			dst:      &Device{IP: ip, MAC: nil},
+			src:      &Device{IP: ip, MAC: nil},
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mergeDevices(tt.dst, tt.src)
+			if tt.expected == nil {
+				if tt.dst.MAC != nil {
+					t.Errorf("Expected nil MAC, got %v", tt.dst.MAC)
+				}
+			} else {
+				if !bytes.Equal(tt.dst.MAC, tt.expected) {
+					t.Errorf("Expected MAC %v, got %v", tt.expected, tt.dst.MAC)
+				}
+			}
+		})
+	}
+}
+
+// TestMergeDevicesPortMerging tests port deduplication during merge.
+func TestMergeDevicesPortMerging(t *testing.T) {
+	tests := []struct {
+		name          string
+		dstPorts      []int
+		srcPorts      []int
+		expectedCount int
+	}{
+		{
+			name:          "No overlap",
+			dstPorts:      []int{80, 443},
+			srcPorts:      []int{22, 8080},
+			expectedCount: 4,
+		},
+		{
+			name:          "Full overlap",
+			dstPorts:      []int{80, 443},
+			srcPorts:      []int{80, 443},
+			expectedCount: 2,
+		},
+		{
+			name:          "Partial overlap",
+			dstPorts:      []int{80, 443},
+			srcPorts:      []int{443, 8080},
+			expectedCount: 3,
+		},
+		{
+			name:          "Dst empty",
+			dstPorts:      nil,
+			srcPorts:      []int{22, 80},
+			expectedCount: 2,
+		},
+		{
+			name:          "Src empty",
+			dstPorts:      []int{22, 80},
+			srcPorts:      nil,
+			expectedCount: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dst := &Device{IP: net.ParseIP("192.168.1.1"), Ports: tt.dstPorts}
+			src := &Device{IP: net.ParseIP("192.168.1.1"), Ports: tt.srcPorts}
+			mergeDevices(dst, src)
+			if len(dst.Ports) != tt.expectedCount {
+				t.Errorf("Expected %d ports, got %d", tt.expectedCount, len(dst.Ports))
+			}
+		})
+	}
+}
+
+// TestGenerateIPsEdgeCases tests IP generation for edge case subnets.
+func TestGenerateIPsEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		subnet   string
+		expected int
+	}{
+		{
+			name:     "Class B /16 subnet",
+			subnet:   "10.0.0.0/16",
+			expected: 65534, // 65536 - 2
+		},
+		{
+			name:     "Class A /8 - limited check",
+			subnet:   "192.0.0.0/8",
+			expected: 16777214, // 16777216 - 2
+		},
+		{
+			name:     "/31 point-to-point",
+			subnet:   "192.168.1.0/31",
+			expected: 0, // 2 - 2 = 0 usable addresses (network semantics)
+		},
+		{
+			name:     "Different starting IP /24",
+			subnet:   "10.100.50.0/24",
+			expected: 254,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, ipNet, err := net.ParseCIDR(tt.subnet)
+			if err != nil {
+				t.Fatalf("Failed to parse CIDR: %v", err)
+			}
+
+			ips := generateIPs(ipNet)
+			if len(ips) != tt.expected {
+				t.Errorf("Expected %d IPs, got %d", tt.expected, len(ips))
+			}
+		})
+	}
+}
+
+// TestDeviceStatusTransitions tests device status values.
+func TestDeviceStatusTransitions(t *testing.T) {
+	tests := []struct {
+		status   DeviceStatus
+		expected string
+	}{
+		{StatusNew, "new"},
+		{StatusOnline, "online"},
+		{StatusOffline, "offline"},
+		{StatusChanged, "changed"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			if string(tt.status) != tt.expected {
+				t.Errorf("Expected '%s', got '%s'", tt.expected, string(tt.status))
+			}
+		})
+	}
+}
+
+// TestMergeDevicesTimestamps tests timestamp merge logic.
+func TestMergeDevicesTimestamps(t *testing.T) {
+	now := time.Now()
+	past := now.Add(-1 * time.Hour)
+	future := now.Add(1 * time.Hour)
+
+	tests := []struct {
+		name              string
+		dstFirst, dstLast time.Time
+		srcFirst, srcLast time.Time
+		expFirst, expLast time.Time
+	}{
+		{
+			name:     "Src has newer LastSeen",
+			dstFirst: past, dstLast: now,
+			srcFirst: now, srcLast: future,
+			expFirst: past, expLast: future,
+		},
+		{
+			name:     "Src has older FirstSeen",
+			dstFirst: now, dstLast: future,
+			srcFirst: past, srcLast: now,
+			expFirst: past, expLast: future,
+		},
+		{
+			name:     "Dst has all older timestamps",
+			dstFirst: past, dstLast: past,
+			srcFirst: now, srcLast: now,
+			expFirst: past, expLast: now,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dst := &Device{
+				IP:        net.ParseIP("192.168.1.1"),
+				FirstSeen: tt.dstFirst,
+				LastSeen:  tt.dstLast,
+			}
+			src := &Device{
+				IP:        net.ParseIP("192.168.1.1"),
+				FirstSeen: tt.srcFirst,
+				LastSeen:  tt.srcLast,
+			}
+			mergeDevices(dst, src)
+			if !dst.FirstSeen.Equal(tt.expFirst) {
+				t.Errorf("FirstSeen: expected %v, got %v", tt.expFirst, dst.FirstSeen)
+			}
+			if !dst.LastSeen.Equal(tt.expLast) {
+				t.Errorf("LastSeen: expected %v, got %v", tt.expLast, dst.LastSeen)
+			}
+		})
+	}
 }
