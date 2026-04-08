@@ -819,6 +819,7 @@ func TestStorageLoadOnStartup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
+	defer storage.Close()
 
 	devices := []scanner.Device{
 		{IP: net.ParseIP("10.0.0.1"), Hostname: "stored-host", Status: scanner.StatusOnline},
@@ -833,7 +834,6 @@ func TestStorageLoadOnStartup(t *testing.T) {
 	if len(m.devices) != 1 {
 		t.Errorf("Expected 1 device loaded from storage, got %d", len(m.devices))
 	}
-	storage.Close()
 }
 
 func TestScanResultMsgError(t *testing.T) {
