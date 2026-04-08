@@ -65,6 +65,7 @@ type Model struct {
 	subnet       string
 	scanning     bool
 	storage      *tracker.Storage
+	registry     *tracker.Registry
 
 	// Tool View state
 	selectedTool   int
@@ -206,16 +207,36 @@ func NewModelWithOrchestratorAndStorage(orch *scanner.Orchestrator, subnet strin
 	homeDir, _ := os.UserHomeDir()
 	scriptsDir := filepath.Join(homeDir, ".config", "tuimap", "scripts")
 
+	// Create device registry with 5 minute offline threshold
+	registry := tracker.NewRegistry(5 * time.Minute)
+
+	// Load previously saved devices from storage
+	initialDevices := make([]scanner.Device, 0)
+	initialAlerts := make([]tracker.Alert, 0)
+	if storage != nil {
+		if loaded, err := storage.LoadDevices(); err == nil && len(loaded) > 0 {
+			initialDevices = loaded
+			// Seed registry with persisted devices
+			_ = registry.Update(loaded)
+			// Drain any alerts generated from loading
+			_ = registry.GetAlerts()
+		}
+		if loadedAlerts, err := storage.LoadAlerts(); err == nil {
+			initialAlerts = loadedAlerts
+		}
+	}
+
 	return Model{
 		currentView:      ViewDeviceList,
 		table:            t,
 		styles:           NewStyles(),
-		devices:          make([]scanner.Device, 0),
-		alerts:           make([]tracker.Alert, 0),
+		devices:          initialDevices,
+		alerts:           initialAlerts,
 		status:           "Ready - Press 's' to scan",
 		orchestrator:     orch,
 		subnet:           subnet,
 		storage:          storage,
+		registry:         registry,
 		selectedTool:     -1,
 		toolInput:        ti,
 		toolOutput:       vp,
@@ -319,10 +340,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.status = fmt.Sprintf("Scan error: %v", msg.err)
 		} else {
-			m.devices = msg.result.Devices
+			// Update registry with scan results to track state changes and generate alerts
+			if m.registry != nil {
+				_ = m.registry.Update(msg.result.Devices)
+				newAlerts := m.registry.GetAlerts()
+				m.alerts = append(m.alerts, newAlerts...)
+				// Use registry's enriched devices (with status tracking)
+				m.devices = m.registry.GetDevices()
+			} else {
+				m.devices = msg.result.Devices
+			}
 			m.scanResult = msg.result
 			m.lastUpdate = time.Now()
 			m.status = fmt.Sprintf("Scan complete: %d devices found in %v", len(m.devices), msg.result.ScanTime.Round(time.Millisecond))
+
+			// Persist devices and alerts to storage
+			if m.storage != nil {
+				_ = m.storage.SaveDevices(m.devices)
+				for _, alert := range m.alerts {
+					_ = m.storage.SaveAlert(alert)
+				}
+			}
 		}
 
 	case tea.WindowSizeMsg:

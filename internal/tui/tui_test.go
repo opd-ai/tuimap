@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"net"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -741,6 +742,97 @@ func TestScanResultMsgSuccess(t *testing.T) {
 	if !strings.Contains(updated.status, "Scan complete") {
 		t.Errorf("Expected 'Scan complete' in status, got '%s'", updated.status)
 	}
+}
+
+func TestScanResultMsgGeneratesAlerts(t *testing.T) {
+	m := NewModel()
+	m.ready = true
+	m.width = 80
+	m.height = 24
+
+	// First scan — new device should generate a new_device alert
+	result := &scanner.ScanResult{
+		Devices: []scanner.Device{
+			{IP: net.ParseIP("192.168.1.1"), Status: scanner.StatusOnline},
+		},
+	}
+	msg := scanResultMsg{result: result, err: nil}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if len(updated.alerts) == 0 {
+		t.Error("Expected at least one alert for new device")
+	}
+	foundNewDevice := false
+	for _, a := range updated.alerts {
+		if a.Type == tracker.AlertNewDevice {
+			foundNewDevice = true
+		}
+	}
+	if !foundNewDevice {
+		t.Error("Expected AlertNewDevice alert type")
+	}
+}
+
+func TestScanResultMsgWithStoragePersistence(t *testing.T) {
+	// Create temporary storage
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	storage, err := tracker.NewStorage(dbPath, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+	defer storage.Close()
+
+	m := NewModelWithOrchestratorAndStorage(nil, "", storage)
+	m.ready = true
+	m.width = 80
+	m.height = 24
+
+	result := &scanner.ScanResult{
+		Devices: []scanner.Device{
+			{IP: net.ParseIP("192.168.1.1"), Status: scanner.StatusOnline},
+		},
+	}
+	msg := scanResultMsg{result: result, err: nil}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if len(updated.devices) != 1 {
+		t.Errorf("Expected 1 device, got %d", len(updated.devices))
+	}
+
+	// Verify devices were persisted
+	loaded, err := storage.LoadDevices()
+	if err != nil {
+		t.Fatalf("Failed to load devices: %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Errorf("Expected 1 persisted device, got %d", len(loaded))
+	}
+}
+
+func TestStorageLoadOnStartup(t *testing.T) {
+	// Create temporary storage and pre-populate
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	storage, err := tracker.NewStorage(dbPath, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	devices := []scanner.Device{
+		{IP: net.ParseIP("10.0.0.1"), Hostname: "stored-host", Status: scanner.StatusOnline},
+	}
+	if err := storage.SaveDevices(devices); err != nil {
+		t.Fatalf("Failed to save devices: %v", err)
+	}
+
+	// Create model — should load stored devices
+	m := NewModelWithOrchestratorAndStorage(nil, "", storage)
+
+	if len(m.devices) != 1 {
+		t.Errorf("Expected 1 device loaded from storage, got %d", len(m.devices))
+	}
+	storage.Close()
 }
 
 func TestScanResultMsgError(t *testing.T) {
