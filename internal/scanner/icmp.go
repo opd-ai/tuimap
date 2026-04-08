@@ -120,20 +120,46 @@ func (s *ICMPScanner) Scan(ctx context.Context, subnet string) ([]Device, error)
 	return devices, nil
 }
 
+// icmpConns holds privileged and unprivileged ICMP connections for a worker.
+type icmpConns struct {
+	priv   *icmp.PacketConn
+	unpriv *icmp.PacketConn
+}
+
+// openICMPConns opens privileged and unprivileged ICMP connections.
+func openICMPConns() icmpConns {
+	var conns icmpConns
+	conns.priv, _ = icmp.ListenPacket("ip4:icmp", "0.0.0.0")
+	conns.unpriv, _ = icmp.ListenPacket("udp4", "")
+	return conns
+}
+
+// close closes both ICMP connections.
+func (c *icmpConns) close() {
+	if c.priv != nil {
+		c.priv.Close()
+	}
+	if c.unpriv != nil {
+		c.unpriv.Close()
+	}
+}
+
+// pingHost tries to ping a host using the available connections.
+func (s *ICMPScanner) pingHost(ctx context.Context, ip net.IP, conns *icmpConns) bool {
+	if conns.priv != nil && s.pingWithConn(ctx, ip, conns.priv, true) {
+		return true
+	}
+	if conns.unpriv != nil && s.pingWithConn(ctx, ip, conns.unpriv, false) {
+		return true
+	}
+	return false
+}
+
 // pingWorker processes IPs from the channel and pings each one.
 // It reuses a single ICMP connection across multiple hosts to avoid socket churn.
 func (s *ICMPScanner) pingWorker(ctx context.Context, ips <-chan net.IP, results chan<- Device, seen *sync.Map) {
-	// Try to create a privileged ICMP connection for this worker
-	privConn, privErr := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
-	if privErr == nil {
-		defer privConn.Close()
-	}
-
-	// Create unprivileged connection as fallback
-	unprivConn, unprivErr := icmp.ListenPacket("udp4", "")
-	if unprivErr == nil {
-		defer unprivConn.Close()
-	}
+	conns := openICMPConns()
+	defer conns.close()
 
 	for ip := range ips {
 		select {
@@ -142,35 +168,26 @@ func (s *ICMPScanner) pingWorker(ctx context.Context, ips <-chan net.IP, results
 		default:
 		}
 
-		success := false
-		if privConn != nil {
-			success = s.pingWithConn(ctx, ip, privConn, true)
+		if !s.pingHost(ctx, ip, &conns) {
+			continue
 		}
-		if !success && unprivConn != nil {
-			success = s.pingWithConn(ctx, ip, unprivConn, false)
+		if _, loaded := seen.LoadOrStore(ip.String(), true); loaded {
+			continue
 		}
 
-		if success {
-			// Deduplicate
-			key := ip.String()
-			if _, loaded := seen.LoadOrStore(key, true); loaded {
-				continue
-			}
+		now := time.Now()
+		device := Device{
+			IP:        ip,
+			LastSeen:  now,
+			FirstSeen: now,
+			Status:    StatusNew,
+			Metadata:  make(map[string]interface{}),
+		}
 
-			now := time.Now()
-			device := Device{
-				IP:        ip,
-				LastSeen:  now,
-				FirstSeen: now,
-				Status:    StatusNew,
-				Metadata:  make(map[string]interface{}),
-			}
-
-			select {
-			case results <- device:
-			case <-ctx.Done():
-				return
-			}
+		select {
+		case results <- device:
+		case <-ctx.Done():
+			return
 		}
 	}
 }

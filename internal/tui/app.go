@@ -275,125 +275,155 @@ func (m Model) Init() tea.Cmd {
 
 // Update handles messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// Handle Tool View specific inputs first
-		if m.currentView == ViewToolView {
-			return m.updateToolView(msg)
-		}
-		// Handle Script Console specific inputs
-		if m.currentView == ViewScriptConsole {
-			return m.updateScriptConsole(msg)
-		}
-
-		switch msg.String() {
-		case "q", "ctrl+c":
-			return m, tea.Quit
-		case "1":
-			m.currentView = ViewNetworkMap
-			m.status = "Network Map View"
-		case "2":
-			m.currentView = ViewDeviceList
-			m.status = "Device List View"
-		case "3":
-			m.currentView = ViewToolView
-			m.status = "Tool View - Select a tool (5-9)"
-		case "4":
-			m.currentView = ViewScriptConsole
-			m.status = "Script Console - Enter command"
-			m.scriptFocused = true
-			m.scriptInput.Focus()
-		case "s":
-			if !m.scanning && m.orchestrator != nil && m.subnet != "" {
-				m.scanning = true
-				m.status = "Scanning..."
-				return m, m.startScan()
-			} else if m.orchestrator == nil {
-				m.status = "Scanner not configured"
-			} else if m.subnet == "" {
-				m.status = "No subnet configured"
-			} else {
-				m.status = "Scan already in progress..."
-			}
-		case "r":
-			m.status = "Refreshing..."
-		}
-
-		if m.currentView == ViewDeviceList {
-			var cmd tea.Cmd
-			m.table, cmd = m.table.Update(msg)
-			return m, cmd
-		}
-
+		return m.handleKeyMsg(msg)
 	case toolResultMsg:
-		m.toolOutputText += msg.output
-		m.toolOutput.SetContent(m.toolOutputText)
-		m.toolOutput.GotoBottom()
-		if msg.done {
-			m.toolRunning = false
-			m.status = "Tool execution completed"
-		}
-		return m, nil
-
+		return m.handleToolResult(msg)
 	case scriptResultMsg:
-		m.scriptRunning = false
-		if msg.err != nil {
-			m.scriptOutputText += fmt.Sprintf("Error: %v\n", msg.err)
-		} else if msg.output != "" {
-			m.scriptOutputText += msg.output
-		} else {
-			m.scriptOutputText += "Script completed successfully.\n"
-		}
-		m.scriptOutput.SetContent(m.scriptOutputText)
-		m.scriptOutput.GotoBottom()
-		m.status = "Script execution completed"
-		return m, nil
-
+		return m.handleScriptResult(msg)
 	case scanResultMsg:
-		m.scanning = false
-		if msg.err != nil {
-			m.status = fmt.Sprintf("Scan error: %v", msg.err)
-		} else {
-			// Update registry with scan results to track state changes and generate alerts
-			if m.registry != nil {
-				_ = m.registry.Update(msg.result.Devices)
-				newAlerts := m.registry.GetAlerts()
-				m.alerts = append(m.alerts, newAlerts...)
-				// Use registry's enriched devices (with status tracking)
-				m.devices = m.registry.GetDevices()
-			} else {
-				m.devices = msg.result.Devices
-			}
-			m.scanResult = msg.result
-			m.lastUpdate = time.Now()
-			m.status = fmt.Sprintf("Scan complete: %d devices found in %v", len(m.devices), msg.result.ScanTime.Round(time.Millisecond))
-
-			// Persist devices and alerts to storage
-			if m.storage != nil {
-				_ = m.storage.SaveDevices(m.devices)
-				for _, alert := range m.alerts {
-					_ = m.storage.SaveAlert(alert)
-				}
-			}
-		}
-
+		return m.handleScanResult(msg)
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.table.SetWidth(m.width - 4)
-		m.table.SetHeight(m.height - 10)
-		m.toolOutput.Width = m.width - 8
-		m.toolOutput.Height = m.height - 18
-		m.toolInput.Width = m.width - 20
-		m.scriptOutput.Width = m.width - 8
-		m.scriptOutput.Height = m.height - 18
-		m.scriptInput.Width = m.width - 20
-		m.ready = true
+		return m.handleWindowSize(msg)
+	}
+	return m, nil
+}
+
+// handleKeyMsg routes key messages to the appropriate view handler.
+func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.currentView == ViewToolView {
+		return m.updateToolView(msg)
+	}
+	if m.currentView == ViewScriptConsole {
+		return m.updateScriptConsole(msg)
 	}
 
-	return m, tea.Batch(cmds...)
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "1":
+		m.currentView = ViewNetworkMap
+		m.status = "Network Map View"
+	case "2":
+		m.currentView = ViewDeviceList
+		m.status = "Device List View"
+	case "3":
+		m.currentView = ViewToolView
+		m.status = "Tool View - Select a tool (5-9)"
+	case "4":
+		m.currentView = ViewScriptConsole
+		m.status = "Script Console - Enter command"
+		m.scriptFocused = true
+		m.scriptInput.Focus()
+	case "s":
+		return m.handleScanKey()
+	case "r":
+		m.status = "Refreshing..."
+	}
+
+	if m.currentView == ViewDeviceList {
+		var cmd tea.Cmd
+		m.table, cmd = m.table.Update(msg)
+		return m, cmd
+	}
+
+	return m, nil
+}
+
+// handleScanKey handles the 's' key press to initiate a scan.
+func (m Model) handleScanKey() (tea.Model, tea.Cmd) {
+	if m.scanning {
+		m.status = "Scan already in progress..."
+		return m, nil
+	}
+	if m.orchestrator == nil {
+		m.status = "Scanner not configured"
+		return m, nil
+	}
+	if m.subnet == "" {
+		m.status = "No subnet configured"
+		return m, nil
+	}
+	m.scanning = true
+	m.status = "Scanning..."
+	return m, m.startScan()
+}
+
+// handleToolResult processes tool execution output.
+func (m Model) handleToolResult(msg toolResultMsg) (tea.Model, tea.Cmd) {
+	m.toolOutputText += msg.output
+	m.toolOutput.SetContent(m.toolOutputText)
+	m.toolOutput.GotoBottom()
+	if msg.done {
+		m.toolRunning = false
+		m.status = "Tool execution completed"
+	}
+	return m, nil
+}
+
+// handleScriptResult processes script execution output.
+func (m Model) handleScriptResult(msg scriptResultMsg) (tea.Model, tea.Cmd) {
+	m.scriptRunning = false
+	if msg.err != nil {
+		m.scriptOutputText += fmt.Sprintf("Error: %v\n", msg.err)
+	} else if msg.output != "" {
+		m.scriptOutputText += msg.output
+	} else {
+		m.scriptOutputText += "Script completed successfully.\n"
+	}
+	m.scriptOutput.SetContent(m.scriptOutputText)
+	m.scriptOutput.GotoBottom()
+	m.status = "Script execution completed"
+	return m, nil
+}
+
+// handleScanResult processes scan completion and updates state.
+func (m Model) handleScanResult(msg scanResultMsg) (tea.Model, tea.Cmd) {
+	m.scanning = false
+	if msg.err != nil {
+		m.status = fmt.Sprintf("Scan error: %v", msg.err)
+		return m, nil
+	}
+
+	// Update registry with scan results to track state changes and generate alerts
+	if m.registry != nil {
+		_ = m.registry.Update(msg.result.Devices)
+		newAlerts := m.registry.GetAlerts()
+		m.alerts = append(m.alerts, newAlerts...)
+		// Use registry's enriched devices (with status tracking)
+		m.devices = m.registry.GetDevices()
+	} else {
+		m.devices = msg.result.Devices
+	}
+	m.scanResult = msg.result
+	m.lastUpdate = time.Now()
+	m.status = fmt.Sprintf("Scan complete: %d devices found in %v", len(m.devices), msg.result.ScanTime.Round(time.Millisecond))
+
+	// Persist devices and alerts to storage
+	if m.storage != nil {
+		_ = m.storage.SaveDevices(m.devices)
+		for _, alert := range m.alerts {
+			_ = m.storage.SaveAlert(alert)
+		}
+	}
+	return m, nil
+}
+
+// handleWindowSize processes terminal resize events.
+func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+	m.width = msg.Width
+	m.height = msg.Height
+	m.table.SetWidth(m.width - 4)
+	m.table.SetHeight(m.height - 10)
+	m.toolOutput.Width = m.width - 8
+	m.toolOutput.Height = m.height - 18
+	m.toolInput.Width = m.width - 20
+	m.scriptOutput.Width = m.width - 8
+	m.scriptOutput.Height = m.height - 18
+	m.scriptInput.Width = m.width - 20
+	m.ready = true
+	return m, nil
 }
 
 // updateToolView handles input for the Tool View.

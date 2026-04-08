@@ -113,19 +113,19 @@
 **Goal affected**: #1 (Fast Scanning <10s) — the core differentiating claim needs regression protection
 **Risk**: `benchmark_test.go` exists but only tests initialization, not actual scanning.
 
-- [ ] Add `BenchmarkOrchestratorFullScan` to `internal/scanner/benchmark_test.go` that creates a mock network interface or uses localhost scanning to validate <10s budget
-- [ ] Add `BenchmarkARPScanSubnet`, `BenchmarkICMPScanSubnet`, `BenchmarkTCPScanSubnet` measuring per-method times against individual method budgets (ARP: <3s, ICMP: <4s, TCP: <3s)
-- [ ] Ensure `.github/workflows/benchmark.yml` references `BenchmarkOrchestratorFullScan` (it already does at line 30, but the function doesn't exist yet)
-- [ ] **Validation**: `go test -bench=BenchmarkOrchestratorFullScan ./internal/scanner/... -benchtime=3x` should complete with each iteration under 10s
+- [x] Add `BenchmarkOrchestratorFullScan` to `internal/scanner/benchmark_test.go` that creates a mock network interface or uses localhost scanning to validate <10s budget
+- [x] Add `BenchmarkARPScanSubnet`, `BenchmarkICMPScanSubnet`, `BenchmarkTCPScanSubnet` measuring per-method times against individual method budgets (ARP: <3s, ICMP: <4s, TCP: <3s)
+- [x] Ensure `.github/workflows/benchmark.yml` references `BenchmarkOrchestratorFullScan` (it already does at line 30, but the function doesn't exist yet)
+- [x] **Validation**: `go test -bench=BenchmarkOrchestratorFullScan ./internal/scanner/... -benchtime=3x` should complete with each iteration under 10s
 
 ### Priority 5: Reduce Complexity of Top-3 Hot Functions
 **Goal affected**: Multiple — these functions are on critical paths and their high complexity (19+) increases bug risk
 **Evidence**: `go-stats-generator` reports `pingWorker` (19.7), `Update` (19.4), `Scan/ARP` (19.2) as highest complexity. The project's median complexity is 4.6.
 
-- [ ] **`pingWorker`** (`internal/scanner/icmp.go`, 50 lines, complexity 19.7): Extract ICMP packet construction and response parsing into separate functions. The current function handles connection setup, packet building, sending, receiving, and response validation in one block.
-- [ ] **`Update`** (`internal/tui/app.go`, 102 lines, complexity 19.4): Extract per-view key handlers into separate methods (e.g., `handleNetworkMapKeys()`, `handleDeviceListKeys()`, `handleToolViewKeys()`, `handleScriptConsoleKeys()`). Currently a single large switch with nested switches.
-- [ ] **`Scan` (ARP)** (`internal/scanner/arp.go`, 76 lines, complexity 19.2): Extract `sendARPRequest()` and `processARPResponse()` helper functions from the monolithic scan loop.
-- [ ] **Validation**: Re-run `go-stats-generator analyze . --skip-tests` — no function should exceed complexity 15 on critical paths
+- [x] **`pingWorker`** (`internal/scanner/icmp.go`, 50 lines, complexity 19.7): Extract ICMP packet construction and response parsing into separate functions. The current function handles connection setup, packet building, sending, receiving, and response validation in one block.
+- [x] **`Update`** (`internal/tui/app.go`, 102 lines, complexity 19.4): Extract per-view key handlers into separate methods (e.g., `handleNetworkMapKeys()`, `handleDeviceListKeys()`, `handleToolViewKeys()`, `handleScriptConsoleKeys()`). Currently a single large switch with nested switches.
+- [x] **`Scan` (ARP)** (`internal/scanner/arp.go`, 76 lines, complexity 19.2): Extract `sendARPRequest()` and `processARPResponse()` helper functions from the monolithic scan loop.
+- [x] **Validation**: Re-run `go-stats-generator analyze . --skip-tests` — no function should exceed complexity 15 on critical paths
 
 ### Priority 6: Expose Multi-Subnet Scanning in TUI
 **Goal affected**: #9 (Multi-Subnet Scanning) — implemented in CLI but not in TUI

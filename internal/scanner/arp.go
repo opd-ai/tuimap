@@ -78,35 +78,53 @@ func (s *ARPScanner) Scan(ctx context.Context, subnet string) ([]Device, error) 
 		return nil, fmt.Errorf("invalid subnet: %w", err)
 	}
 
-	// Open pcap handle
-	handle, err := pcap.OpenLive(s.iface.Name, 65536, true, pcap.BlockForever)
+	handle, err := s.openPcapHandle()
 	if err != nil {
-		return nil, fmt.Errorf("failed to open pcap handle: %w", err)
+		return nil, err
 	}
 	defer handle.Close()
 
-	// Set BPF filter to capture only ARP responses
-	if err := handle.SetBPFFilter("arp"); err != nil {
-		return nil, fmt.Errorf("failed to set BPF filter: %w", err)
-	}
-
-	// Generate list of IPs to scan
 	ips := generateIPs(ipNet)
 	if len(ips) == 0 {
 		return nil, nil
 	}
 
-	// Result collection
 	results := make(chan Device, len(ips))
 	seen := &sync.Map{}
 
-	// Start response listener
 	listenerCtx, cancelListener := context.WithCancel(ctx)
 	defer cancelListener()
-
 	go s.listenForResponses(listenerCtx, handle, results, seen)
 
-	// Start worker pool to send ARP requests
+	s.sendARPRequests(ctx, handle, ips)
+
+	// Give time for final responses
+	select {
+	case <-time.After(s.timeout):
+	case <-ctx.Done():
+	}
+
+	cancelListener()
+	close(results)
+
+	return collectDevices(results), nil
+}
+
+// openPcapHandle opens a pcap handle with ARP BPF filter.
+func (s *ARPScanner) openPcapHandle() (*pcap.Handle, error) {
+	handle, err := pcap.OpenLive(s.iface.Name, 65536, true, pcap.BlockForever)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open pcap handle: %w", err)
+	}
+	if err := handle.SetBPFFilter("arp"); err != nil {
+		handle.Close()
+		return nil, fmt.Errorf("failed to set BPF filter: %w", err)
+	}
+	return handle, nil
+}
+
+// sendARPRequests distributes IPs to worker goroutines for ARP request sending.
+func (s *ARPScanner) sendARPRequests(ctx context.Context, handle *pcap.Handle, ips []net.IP) {
 	var wg sync.WaitGroup
 	ipChan := make(chan net.IP, len(ips))
 
@@ -118,7 +136,6 @@ func (s *ARPScanner) Scan(ctx context.Context, subnet string) ([]Device, error) 
 		}()
 	}
 
-	// Feed IPs to workers
 	go func() {
 		for _, ip := range ips {
 			select {
@@ -130,25 +147,16 @@ func (s *ARPScanner) Scan(ctx context.Context, subnet string) ([]Device, error) 
 		close(ipChan)
 	}()
 
-	// Wait for workers to finish sending
 	wg.Wait()
+}
 
-	// Give some time for final responses
-	select {
-	case <-time.After(s.timeout):
-	case <-ctx.Done():
-	}
-
-	cancelListener()
-	close(results)
-
-	// Collect results
+// collectDevices drains a device channel into a slice.
+func collectDevices(ch <-chan Device) []Device {
 	var devices []Device
-	for device := range results {
+	for device := range ch {
 		devices = append(devices, device)
 	}
-
-	return devices, nil
+	return devices
 }
 
 // arpWorker sends ARP requests for IPs from the channel.
