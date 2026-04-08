@@ -33,8 +33,9 @@ func TestModelInit(t *testing.T) {
 	m := NewModel()
 	cmd := m.Init()
 
-	if cmd != nil {
-		t.Error("Expected nil command from Init")
+	// Init should return a command to discover subnets
+	if cmd == nil {
+		t.Error("Expected non-nil command from Init (subnet discovery)")
 	}
 }
 
@@ -918,5 +919,75 @@ func TestRenderDeviceList(t *testing.T) {
 	result := m.renderDeviceList()
 	if result == "" {
 		t.Error("Expected non-empty device list")
+	}
+}
+
+func TestSubnetDiscoverMsg(t *testing.T) {
+	m := NewModel()
+	m.ready = true
+	m.width = 80
+	m.height = 24
+
+	subnets := []scanner.SubnetInfo{
+		{Subnet: "192.168.1.0/24", Interface: "eth0", Local: true},
+		{Subnet: "10.0.0.0/24", Interface: "eth1", Local: true},
+	}
+	msg := subnetDiscoverMsg{subnets: subnets}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if len(updated.subnets) != 2 {
+		t.Errorf("Expected 2 subnets, got %d", len(updated.subnets))
+	}
+	if updated.subnet != "192.168.1.0/24" {
+		t.Errorf("Expected first subnet to be selected, got '%s'", updated.subnet)
+	}
+}
+
+func TestCycleSubnet(t *testing.T) {
+	m := NewModel()
+	m.ready = true
+	m.width = 80
+	m.height = 24
+	m.subnets = []scanner.SubnetInfo{
+		{Subnet: "192.168.1.0/24"},
+		{Subnet: "10.0.0.0/24"},
+	}
+	m.subnet = "192.168.1.0/24"
+	m.subnetIdx = 0
+
+	// Press 'n' to cycle
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.subnet != "10.0.0.0/24" {
+		t.Errorf("Expected subnet '10.0.0.0/24' after cycle, got '%s'", updated.subnet)
+	}
+	if updated.subnetIdx != 1 {
+		t.Errorf("Expected subnetIdx 1, got %d", updated.subnetIdx)
+	}
+
+	// Cycle again to wrap around
+	newModel, _ = updated.Update(msg)
+	updated = newModel.(Model)
+
+	if updated.subnet != "192.168.1.0/24" {
+		t.Errorf("Expected subnet '192.168.1.0/24' after wrap, got '%s'", updated.subnet)
+	}
+}
+
+func TestCycleSubnetEmpty(t *testing.T) {
+	m := NewModel()
+	m.ready = true
+	m.width = 80
+	m.height = 24
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if !strings.Contains(updated.status, "No subnets discovered") {
+		t.Errorf("Expected 'No subnets discovered' status, got '%s'", updated.status)
 	}
 }

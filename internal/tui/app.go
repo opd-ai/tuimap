@@ -48,6 +48,11 @@ type scriptResultMsg struct {
 	err    error
 }
 
+// subnetDiscoverMsg is sent when subnet discovery completes.
+type subnetDiscoverMsg struct {
+	subnets []scanner.SubnetInfo
+}
+
 // Model is the main Bubble Tea model for the TUI.
 type Model struct {
 	width        int
@@ -66,6 +71,8 @@ type Model struct {
 	scanning     bool
 	storage      *tracker.Storage
 	registry     *tracker.Registry
+	subnets      []scanner.SubnetInfo // Discovered subnets
+	subnetIdx    int                  // Currently selected subnet index
 
 	// Tool View state
 	selectedTool   int
@@ -252,9 +259,15 @@ func NewModelWithOrchestratorAndStorage(orch *scanner.Orchestrator, subnet strin
 	}
 }
 
-// Init initializes the model.
+// Init initializes the model and discovers available subnets.
 func (m Model) Init() tea.Cmd {
-	return nil
+	return discoverSubnets
+}
+
+// discoverSubnets runs subnet discovery in the background.
+func discoverSubnets() tea.Msg {
+	subnets, _ := scanner.DiscoverSubnets()
+	return subnetDiscoverMsg{subnets: subnets}
 }
 
 // Update handles messages.
@@ -270,6 +283,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleScanResult(msg)
 	case tea.WindowSizeMsg:
 		return m.handleWindowSize(msg)
+	case subnetDiscoverMsg:
+		return m.handleSubnetDiscover(msg)
+	}
+	return m, nil
+}
+
+// handleSubnetDiscover processes subnet discovery results.
+func (m Model) handleSubnetDiscover(msg subnetDiscoverMsg) (tea.Model, tea.Cmd) {
+	m.subnets = msg.subnets
+	if len(m.subnets) > 0 && m.subnet == "" {
+		m.subnet = m.subnets[0].Subnet
+		m.subnetIdx = 0
+		m.status = fmt.Sprintf("Ready - Press 's' to scan (%d subnet(s) found, active: %s)", len(m.subnets), m.subnet)
 	}
 	return m, nil
 }
@@ -302,6 +328,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.scriptInput.Focus()
 	case "s":
 		return m.handleScanKey()
+	case "n":
+		return m.cycleSubnet()
 	case "r":
 		m.status = "Refreshing..."
 	}
@@ -330,8 +358,20 @@ func (m Model) handleScanKey() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.scanning = true
-	m.status = "Scanning..."
+	m.status = fmt.Sprintf("Scanning %s...", m.subnet)
 	return m, m.startScan()
+}
+
+// cycleSubnet cycles through discovered subnets.
+func (m Model) cycleSubnet() (tea.Model, tea.Cmd) {
+	if len(m.subnets) == 0 {
+		m.status = "No subnets discovered"
+		return m, nil
+	}
+	m.subnetIdx = (m.subnetIdx + 1) % len(m.subnets)
+	m.subnet = m.subnets[m.subnetIdx].Subnet
+	m.status = fmt.Sprintf("Active subnet: %s (%d/%d)", m.subnet, m.subnetIdx+1, len(m.subnets))
+	return m, nil
 }
 
 // handleToolResult processes tool execution output.
@@ -817,7 +857,7 @@ func (m Model) renderStatusBar() string {
 // renderHelp renders the help text.
 func (m Model) renderHelp() string {
 	return m.styles.HelpStyle.Render(
-		"q: quit | s: scan | r: refresh | 1-4: switch views | ↑↓: navigate",
+		"q: quit | s: scan | n: next subnet | r: refresh | 1-4: switch views | ↑↓: navigate",
 	)
 }
 

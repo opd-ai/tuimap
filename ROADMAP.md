@@ -131,10 +131,10 @@
 **Goal affected**: #9 (Multi-Subnet Scanning) — implemented in CLI but not in TUI
 **Risk**: Low — `MultiSubnetScanner` is well-implemented (397 lines) and already exposed in CLI.
 
-- [ ] Add a subnet discovery step on TUI startup that calls `scanner.DiscoverSubnets()` and presents discovered subnets
-- [ ] Allow users to select which subnet(s) to scan (or scan all) from the TUI
-- [ ] Display per-subnet results in the Network Map view with subnet grouping
-- [ ] **Validation**: Run TUI on a multi-homed machine → should show discovered subnets → pressing `s` should scan selected subnet(s)
+- [x] Add a subnet discovery step on TUI startup that calls `scanner.DiscoverSubnets()` and presents discovered subnets
+- [x] Allow users to select which subnet(s) to scan (or scan all) from the TUI
+- [x] Display per-subnet results in the Network Map view with subnet grouping
+- [x] **Validation**: Run TUI on a multi-homed machine → should show discovered subnets → pressing `s` should scan selected subnet(s)
 
 ### Priority 7: NAT Port Mapping — Document or Implement
 **Goal affected**: #6 (NAT Environment Support) — port mapping is a stub, explicitly acknowledged via `NOTE:` comments
