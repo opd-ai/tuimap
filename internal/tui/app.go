@@ -458,7 +458,6 @@ func (m Model) handleScanResult(msg scanResultMsg) (tea.Model, tea.Cmd) {
 		for _, alert := range newAlerts {
 			if err := m.storage.SaveAlert(alert); err != nil {
 				m.status += fmt.Sprintf(" (alert save error: %v)", err)
-				break
 			}
 		}
 	}

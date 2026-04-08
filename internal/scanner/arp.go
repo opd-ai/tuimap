@@ -142,15 +142,14 @@ func (s *ARPScanner) sendARPRequests(ctx context.Context, handle *pcap.Handle, i
 	}
 
 	go func() {
+		defer close(ipChan)
 		for _, ip := range ips {
 			select {
 			case ipChan <- ip:
 			case <-ctx.Done():
-				close(ipChan)
 				return
 			}
 		}
-		close(ipChan)
 	}()
 
 	wg.Wait()
