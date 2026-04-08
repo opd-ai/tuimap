@@ -140,18 +140,18 @@
 **Goal affected**: #6 (NAT Environment Support) — port mapping is a stub, explicitly acknowledged via `NOTE:` comments
 **Risk**: Full UPnP IGD implementation requires SOAP/HTTP calls; NAT-PMP requires raw packet construction. Both are non-trivial.
 
-- [ ] **Option A (Recommended)**: Document the limitation in README and API.md — add a "Known Limitations" section clarifying that NAT detection works but port mapping (`AddPortMapping`/`RemovePortMapping`) is not yet implemented. Remove port mapping from `NATClient` interface examples.
+- [x] **Option A (Recommended)**: Document the limitation in README and API.md — add a "Known Limitations" section clarifying that NAT detection works but port mapping (`AddPortMapping`/`RemovePortMapping`) is not yet implemented. Remove port mapping from `NATClient` interface examples.
 - [ ] **Option B**: Implement UPnP IGD SOAP calls for `AddPortMapping` action at `internal/nat/nat.go:516-523` and NAT-PMP mapping request packets per RFC 6886 at lines 526-532.
-- [ ] **Validation (Option A)**: `grep -n "AddPortMapping" README.md docs/*.md` should only appear in "Known Limitations" context
+- [x] **Validation (Option A)**: `grep -n "AddPortMapping" README.md docs/*.md` should only appear in "Known Limitations" context
 - [ ] **Validation (Option B)**: Integration test with UPnP-capable gateway showing port mapping creation/deletion
 
 ### Priority 8: Reduce Duplication in TUI View Code
 **Goal affected**: Code maintainability — `go-stats-generator` found 2 clone pairs (24 lines, 0.40% ratio)
 **Evidence**: `internal/tui/app.go:173-180` ↔ `app.go:193-200` (8 lines), `app.go:701-716` ↔ `app.go:731-746` (16 lines)
 
-- [ ] Extract the duplicated text input initialization pattern (lines 173-180, 193-200) into a helper function
-- [ ] Extract the duplicated view rendering pattern (lines 701-716, 731-746) into a parameterized helper
-- [ ] **Validation**: Re-run `go-stats-generator analyze . --skip-tests` — duplication ratio should drop to 0%
+- [x] Extract the duplicated text input initialization pattern (lines 173-180, 193-200) into a helper function
+- [x] Extract the duplicated view rendering pattern (lines 701-716, 731-746) into a parameterized helper
+- [x] **Validation**: Re-run `go-stats-generator analyze . --skip-tests` — duplication ratio should drop to 0%
 
 ---
 

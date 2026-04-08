@@ -170,15 +170,9 @@ func NewModelWithOrchestratorAndStorage(orch *scanner.Orchestrator, subnet strin
 		Bold(false)
 	t.SetStyles(s)
 
-	// Initialize tool input
-	ti := textinput.New()
-	ti.Placeholder = "Enter arguments..."
-	ti.CharLimit = 256
-	ti.Width = 50
-
-	// Initialize tool output viewport
-	vp := viewport.New(60, 10)
-	vp.SetContent("Tool output will appear here.")
+	// Initialize text inputs and viewports
+	ti, vp := newInputAndViewport("Enter arguments...", "Tool output will appear here.")
+	si, svp := newInputAndViewport(":load <script>, :list, :stop", "Script output will appear here.")
 
 	// Initialize network tools
 	timeout := 10 * time.Second
@@ -189,16 +183,6 @@ func NewModelWithOrchestratorAndStorage(orch *scanner.Orchestrator, subnet strin
 		tools.NewDigTool(timeout, ""),
 		tools.NewWhoisTool(timeout),
 	}
-
-	// Initialize script console input
-	si := textinput.New()
-	si.Placeholder = ":load <script>, :list, :stop"
-	si.CharLimit = 256
-	si.Width = 50
-
-	// Initialize script output viewport
-	svp := viewport.New(60, 10)
-	svp.SetContent("Script output will appear here.")
 
 	// Initialize script engine
 	engine := script.NewTengoEngine(30*time.Second, 50)
@@ -782,14 +766,7 @@ func (m Model) renderToolView() string {
 	}
 
 	// Show output area
-	builder.WriteString("Output:\n")
-	builder.WriteString("─────────────────────────────────────────────\n")
-	if m.toolOutputText != "" {
-		builder.WriteString(m.toolOutput.View())
-	} else {
-		builder.WriteString("Tool output will appear here.\n")
-	}
-	builder.WriteString("\n─────────────────────────────────────────────\n")
+	renderOutputArea(&builder, m.toolOutputText, m.toolOutput.View(), "Tool output will appear here.")
 
 	if m.toolRunning {
 		builder.WriteString("\n[Running...] Press Esc to cancel")
@@ -812,14 +789,7 @@ func (m Model) renderScriptConsole() string {
 	builder.WriteString("\n\n")
 
 	// Show output area
-	builder.WriteString("Output:\n")
-	builder.WriteString("─────────────────────────────────────────────\n")
-	if m.scriptOutputText != "" {
-		builder.WriteString(m.scriptOutput.View())
-	} else {
-		builder.WriteString("Script output will appear here.\n")
-	}
-	builder.WriteString("\n─────────────────────────────────────────────\n")
+	renderOutputArea(&builder, m.scriptOutputText, m.scriptOutput.View(), "Script output will appear here.")
 
 	if m.scriptRunning {
 		builder.WriteString("\n[Running...] :stop to cancel")
@@ -999,4 +969,29 @@ func devicesToMaps(devices []scanner.Device) []map[string]interface{} {
 		result[i] = m
 	}
 	return result
+}
+
+// newInputAndViewport creates a text input and viewport pair with the given settings.
+func newInputAndViewport(placeholder, defaultContent string) (textinput.Model, viewport.Model) {
+	ti := textinput.New()
+	ti.Placeholder = placeholder
+	ti.CharLimit = 256
+	ti.Width = 50
+
+	vp := viewport.New(60, 10)
+	vp.SetContent(defaultContent)
+
+	return ti, vp
+}
+
+// renderOutputArea writes a bordered output section to the builder.
+func renderOutputArea(builder *strings.Builder, text, viewContent, placeholder string) {
+	builder.WriteString("Output:\n")
+	builder.WriteString("─────────────────────────────────────────────\n")
+	if text != "" {
+		builder.WriteString(viewContent)
+	} else {
+		builder.WriteString(placeholder + "\n")
+	}
+	builder.WriteString("\n─────────────────────────────────────────────\n")
 }
