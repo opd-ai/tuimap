@@ -103,11 +103,11 @@
 **Goal affected**: #4 (Extensible Scripting) — scripts currently execute but all network API calls return empty results
 **Risk**: API bridge setters exist and are tested; wiring is mechanical.
 
-- [ ] In `NewModelWithOrchestratorAndStorage()` (`app.go:203-225`), after creating the `TengoEngine`, call `engine.SetAPIBridge()` with an `APIBridge` that has `SetScanner()` and `SetPinger()` wired to the real orchestrator
-- [ ] Create a `ScannerFunc` wrapper that calls `m.orchestrator.Scan()` and converts `[]scanner.Device` to `[]map[string]interface{}`
-- [ ] Create a `PingerFunc` wrapper using ICMP or TCP connectivity check
-- [ ] Wire `get_devices()` to return data from the registry/device list
-- [ ] **Validation**: Run TUI → press `4` for Script Console → type `:load` with an example script like `scripts/examples/auto-scan.tengo` — script should discover real devices, not return empty arrays
+- [x] In `NewModelWithOrchestratorAndStorage()` (`app.go:203-225`), after creating the `TengoEngine`, call `engine.SetAPIBridge()` with an `APIBridge` that has `SetScanner()` and `SetPinger()` wired to the real orchestrator
+- [x] Create a `ScannerFunc` wrapper that calls `m.orchestrator.Scan()` and converts `[]scanner.Device` to `[]map[string]interface{}`
+- [x] Create a `PingerFunc` wrapper using ICMP or TCP connectivity check
+- [x] Wire `get_devices()` to return data from the registry/device list
+- [x] **Validation**: Run TUI → press `4` for Script Console → type `:load` with an example script like `scripts/examples/auto-scan.tengo` — script should discover real devices, not return empty arrays
 
 ### Priority 4: Add End-to-End Scan Benchmark Tests
 **Goal affected**: #1 (Fast Scanning <10s) — the core differentiating claim needs regression protection

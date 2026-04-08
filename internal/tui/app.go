@@ -210,6 +210,22 @@ func NewModelWithOrchestratorAndStorage(orch *scanner.Orchestrator, subnet strin
 	// Create device registry with 5 minute offline threshold
 	registry := tracker.NewRegistry(5 * time.Minute)
 
+	// Wire script engine API bridge to real scanner and registry
+	apiBridge := script.NewAPIBridge()
+	if orch != nil {
+		apiBridge.SetScanner(func(ctx context.Context, sub string) ([]map[string]interface{}, error) {
+			result, err := orch.Scan(ctx, sub)
+			if err != nil {
+				return nil, err
+			}
+			return devicesToMaps(result.Devices), nil
+		})
+	}
+	apiBridge.SetDevicesProvider(func() []map[string]interface{} {
+		return devicesToMaps(registry.GetDevices())
+	})
+	engine.SetAPIBridge(apiBridge)
+
 	// Load previously saved devices from storage
 	initialDevices := make([]scanner.Device, 0)
 	initialAlerts := make([]tracker.Alert, 0)
@@ -928,4 +944,29 @@ func RunWithOrchestratorAndStorage(orch *scanner.Orchestrator, subnet string, st
 	p := tea.NewProgram(NewModelWithOrchestratorAndStorage(orch, subnet, storage), tea.WithAltScreen())
 	_, err := p.Run()
 	return err
+}
+
+// devicesToMaps converts a slice of scanner.Device to a slice of maps for script API use.
+func devicesToMaps(devices []scanner.Device) []map[string]interface{} {
+	result := make([]map[string]interface{}, len(devices))
+	for i, d := range devices {
+		m := map[string]interface{}{
+			"ip":       d.IP.String(),
+			"hostname": d.Hostname,
+			"vendor":   d.Vendor,
+			"status":   string(d.Status),
+		}
+		if d.MAC != nil {
+			m["mac"] = d.MAC.String()
+		}
+		if len(d.Ports) > 0 {
+			ports := make([]interface{}, len(d.Ports))
+			for j, p := range d.Ports {
+				ports[j] = p
+			}
+			m["ports"] = ports
+		}
+		result[i] = m
+	}
+	return result
 }

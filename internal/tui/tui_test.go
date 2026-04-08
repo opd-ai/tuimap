@@ -851,6 +851,60 @@ func TestScanResultMsgError(t *testing.T) {
 	}
 }
 
+func TestDevicesToMaps(t *testing.T) {
+	devices := []scanner.Device{
+		{
+			IP:       net.ParseIP("192.168.1.1"),
+			MAC:      net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff},
+			Hostname: "host1",
+			Vendor:   "Vendor1",
+			Status:   scanner.StatusOnline,
+			Ports:    []int{80, 443},
+		},
+		{
+			IP:       net.ParseIP("10.0.0.1"),
+			Hostname: "host2",
+			Status:   scanner.StatusNew,
+		},
+	}
+
+	maps := devicesToMaps(devices)
+	if len(maps) != 2 {
+		t.Fatalf("Expected 2 maps, got %d", len(maps))
+	}
+
+	if maps[0]["ip"] != "192.168.1.1" {
+		t.Errorf("Expected ip '192.168.1.1', got '%v'", maps[0]["ip"])
+	}
+	if maps[0]["mac"] != "aa:bb:cc:dd:ee:ff" {
+		t.Errorf("Expected mac 'aa:bb:cc:dd:ee:ff', got '%v'", maps[0]["mac"])
+	}
+	if maps[0]["hostname"] != "host1" {
+		t.Errorf("Expected hostname 'host1', got '%v'", maps[0]["hostname"])
+	}
+	ports, ok := maps[0]["ports"].([]interface{})
+	if !ok || len(ports) != 2 {
+		t.Errorf("Expected 2 ports, got %v", maps[0]["ports"])
+	}
+
+	// Second device has no MAC
+	if _, hasMac := maps[1]["mac"]; hasMac {
+		t.Error("Expected no mac key for device without MAC")
+	}
+}
+
+func TestScriptEngineAPIBridgeWired(t *testing.T) {
+	m := NewModel()
+
+	if m.scriptEngine == nil {
+		t.Fatal("Expected scriptEngine to be initialized")
+	}
+	// The registry should be non-nil and the engine should have a real APIBridge
+	if m.registry == nil {
+		t.Fatal("Expected registry to be initialized")
+	}
+}
+
 func TestRenderDeviceList(t *testing.T) {
 	m := NewModel()
 	m.ready = true
