@@ -93,8 +93,12 @@ func (s *ARPScanner) Scan(ctx context.Context, subnet string) ([]Device, error) 
 	seen := &sync.Map{}
 
 	listenerCtx, cancelListener := context.WithCancel(ctx)
-	defer cancelListener()
-	go s.listenForResponses(listenerCtx, handle, results, seen)
+	var listenerWg sync.WaitGroup
+	listenerWg.Add(1)
+	go func() {
+		defer listenerWg.Done()
+		s.listenForResponses(listenerCtx, handle, results, seen)
+	}()
 
 	s.sendARPRequests(ctx, handle, ips)
 
@@ -105,6 +109,7 @@ func (s *ARPScanner) Scan(ctx context.Context, subnet string) ([]Device, error) 
 	}
 
 	cancelListener()
+	listenerWg.Wait()
 	close(results)
 
 	return collectDevices(results), nil
@@ -141,7 +146,8 @@ func (s *ARPScanner) sendARPRequests(ctx context.Context, handle *pcap.Handle, i
 			select {
 			case ipChan <- ip:
 			case <-ctx.Done():
-				break
+				close(ipChan)
+				return
 			}
 		}
 		close(ipChan)

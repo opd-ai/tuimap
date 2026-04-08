@@ -991,3 +991,70 @@ func TestCycleSubnetEmpty(t *testing.T) {
 		t.Errorf("Expected 'No subnets discovered' status, got '%s'", updated.status)
 	}
 }
+
+func TestSubnetDiscoverMsgError(t *testing.T) {
+	m := NewModel()
+	m.ready = true
+	m.width = 80
+	m.height = 24
+
+	msg := subnetDiscoverMsg{err: fmt.Errorf("no interfaces")}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if !strings.Contains(updated.status, "Subnet discovery failed") {
+		t.Errorf("Expected 'Subnet discovery failed' status, got '%s'", updated.status)
+	}
+	if len(updated.subnets) != 0 {
+		t.Errorf("Expected 0 subnets on error, got %d", len(updated.subnets))
+	}
+}
+
+func TestSubnetDiscoverMsgPreconfigured(t *testing.T) {
+	m := NewModel()
+	m.ready = true
+	m.width = 80
+	m.height = 24
+	m.subnet = "10.0.0.0/24" // preconfigured
+
+	subnets := []scanner.SubnetInfo{
+		{Subnet: "192.168.1.0/24"},
+		{Subnet: "10.0.0.0/24"},
+		{Subnet: "172.16.0.0/24"},
+	}
+	msg := subnetDiscoverMsg{subnets: subnets}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.subnetIdx != 1 {
+		t.Errorf("Expected subnetIdx 1 for preconfigured '10.0.0.0/24', got %d", updated.subnetIdx)
+	}
+	if updated.subnet != "10.0.0.0/24" {
+		t.Errorf("Expected subnet to remain '10.0.0.0/24', got '%s'", updated.subnet)
+	}
+}
+
+func TestCycleSubnetDuringScan(t *testing.T) {
+	m := NewModel()
+	m.ready = true
+	m.width = 80
+	m.height = 24
+	m.scanning = true
+	m.subnets = []scanner.SubnetInfo{
+		{Subnet: "192.168.1.0/24"},
+		{Subnet: "10.0.0.0/24"},
+	}
+	m.subnet = "192.168.1.0/24"
+	m.subnetIdx = 0
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.subnet != "192.168.1.0/24" {
+		t.Errorf("Expected subnet unchanged during scan, got '%s'", updated.subnet)
+	}
+	if !strings.Contains(updated.status, "Cannot switch subnet during scan") {
+		t.Errorf("Expected 'Cannot switch subnet during scan' status, got '%s'", updated.status)
+	}
+}

@@ -51,6 +51,7 @@ type scriptResultMsg struct {
 // subnetDiscoverMsg is sent when subnet discovery completes.
 type subnetDiscoverMsg struct {
 	subnets []scanner.SubnetInfo
+	err     error
 }
 
 // Model is the main Bubble Tea model for the TUI.
@@ -222,9 +223,13 @@ func NewModelWithOrchestratorAndStorage(orch *scanner.Orchestrator, subnet strin
 	initialAlerts := make([]tracker.Alert, 0)
 	if storage != nil {
 		if loaded, err := storage.LoadDevices(); err == nil && len(loaded) > 0 {
-			initialDevices = loaded
-			// Seed registry with persisted devices
-			_ = registry.Update(loaded)
+			// Preserve persisted device state for the initial model.
+			initialDevices = append([]scanner.Device(nil), loaded...)
+
+			// Seed registry with a separate copy because Update mutates
+			// device status and timestamps in-place.
+			seedDevices := append([]scanner.Device(nil), loaded...)
+			_ = registry.Update(seedDevices)
 			// Drain any alerts generated from loading
 			_ = registry.GetAlerts()
 		}
@@ -266,8 +271,8 @@ func (m Model) Init() tea.Cmd {
 
 // discoverSubnets runs subnet discovery in the background.
 func discoverSubnets() tea.Msg {
-	subnets, _ := scanner.DiscoverSubnets()
-	return subnetDiscoverMsg{subnets: subnets}
+	subnets, err := scanner.DiscoverSubnets()
+	return subnetDiscoverMsg{subnets: subnets, err: err}
 }
 
 // Update handles messages.
@@ -291,11 +296,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleSubnetDiscover processes subnet discovery results.
 func (m Model) handleSubnetDiscover(msg subnetDiscoverMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.status = fmt.Sprintf("Subnet discovery failed: %v", msg.err)
+		return m, nil
+	}
 	m.subnets = msg.subnets
-	if len(m.subnets) > 0 && m.subnet == "" {
+	if len(m.subnets) == 0 {
+		return m, nil
+	}
+
+	if m.subnet == "" {
 		m.subnet = m.subnets[0].Subnet
 		m.subnetIdx = 0
 		m.status = fmt.Sprintf("Ready - Press 's' to scan (%d subnet(s) found, active: %s)", len(m.subnets), m.subnet)
+		return m, nil
+	}
+
+	for i, subnet := range m.subnets {
+		if subnet.Subnet == m.subnet {
+			m.subnetIdx = i
+			break
+		}
 	}
 	return m, nil
 }
@@ -364,6 +385,10 @@ func (m Model) handleScanKey() (tea.Model, tea.Cmd) {
 
 // cycleSubnet cycles through discovered subnets.
 func (m Model) cycleSubnet() (tea.Model, tea.Cmd) {
+	if m.scanning {
+		m.status = "Cannot switch subnet during scan"
+		return m, nil
+	}
 	if len(m.subnets) == 0 {
 		m.status = "No subnets discovered"
 		return m, nil
@@ -411,9 +436,10 @@ func (m Model) handleScanResult(msg scanResultMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Update registry with scan results to track state changes and generate alerts
+	var newAlerts []tracker.Alert
 	if m.registry != nil {
 		_ = m.registry.Update(msg.result.Devices)
-		newAlerts := m.registry.GetAlerts()
+		newAlerts = m.registry.GetAlerts()
 		m.alerts = append(m.alerts, newAlerts...)
 		// Use registry's enriched devices (with status tracking)
 		m.devices = m.registry.GetDevices()
@@ -424,11 +450,16 @@ func (m Model) handleScanResult(msg scanResultMsg) (tea.Model, tea.Cmd) {
 	m.lastUpdate = time.Now()
 	m.status = fmt.Sprintf("Scan complete: %d devices found in %v", len(m.devices), msg.result.ScanTime.Round(time.Millisecond))
 
-	// Persist devices and alerts to storage
+	// Persist devices and new alerts to storage
 	if m.storage != nil {
-		_ = m.storage.SaveDevices(m.devices)
-		for _, alert := range m.alerts {
-			_ = m.storage.SaveAlert(alert)
+		if err := m.storage.SaveDevices(m.devices); err != nil {
+			m.status += fmt.Sprintf(" (storage error: %v)", err)
+		}
+		for _, alert := range newAlerts {
+			if err := m.storage.SaveAlert(alert); err != nil {
+				m.status += fmt.Sprintf(" (alert save error: %v)", err)
+				break
+			}
 		}
 	}
 	return m, nil

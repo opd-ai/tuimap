@@ -494,7 +494,7 @@ type NATInfo struct {
 }
 ```
 
-> **Known Limitation**: NAT detection (type detection, public IP via STUN, UPnP/NAT-PMP discovery) is fully functional. Port mapping operations (`AddPortMapping` / `RemovePortMapping`) are not yet implemented and return `ErrNATUnsupported`.
+> **Known Limitation**: NAT detection (type detection, public IP via STUN, UPnP/NAT-PMP discovery) is fully functional. Port mapping operations are not yet functionally implemented; currently, `AddPortMapping` returns `ErrPortMapFailed`, and `RemovePortMapping` is a no-op that returns `nil`.
 
 ---
 
