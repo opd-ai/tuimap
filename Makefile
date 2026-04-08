@@ -17,6 +17,9 @@ GOCLEAN=$(GOCMD) clean
 GOMOD=$(GOCMD) mod
 GOFMT=$(GOCMD) fmt
 
+# Disable CGO for fully static, pure-Go builds
+export CGO_ENABLED=0
+
 # Linker flags
 LDFLAGS=-ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)"
 
@@ -31,7 +34,7 @@ build:
 ## test: Run tests
 test:
 	@echo "Running tests..."
-	$(GOTEST) -v -race -coverprofile=coverage.out ./...
+	$(GOTEST) -v -coverprofile=coverage.out ./...
 
 ## test-coverage: Run tests with coverage report
 test-coverage: test

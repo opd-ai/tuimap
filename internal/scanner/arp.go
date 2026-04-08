@@ -1,4 +1,7 @@
 // Package scanner provides network scanning functionality for device discovery.
+
+//go:build linux
+
 package scanner
 
 import (
@@ -9,12 +12,13 @@ import (
 	"time"
 
 	"github.com/gopacket/gopacket"
+	"github.com/gopacket/gopacket/afpacket"
 	"github.com/gopacket/gopacket/layers"
-	"github.com/gopacket/gopacket/pcap"
+	"golang.org/x/net/bpf"
 )
 
 // ARPScanner implements ARP-based network scanning for device discovery.
-// It uses raw sockets via gopacket/pcap for fast layer 2 discovery.
+// It uses raw AF_PACKET sockets via gopacket/afpacket for fast layer 2 discovery.
 type ARPScanner struct {
 	iface     *net.Interface
 	workers   int
@@ -78,7 +82,7 @@ func (s *ARPScanner) Scan(ctx context.Context, subnet string) ([]Device, error) 
 		return nil, fmt.Errorf("invalid subnet: %w", err)
 	}
 
-	handle, err := s.openPcapHandle()
+	handle, err := s.openHandle()
 	if err != nil {
 		return nil, err
 	}
@@ -115,21 +119,37 @@ func (s *ARPScanner) Scan(ctx context.Context, subnet string) ([]Device, error) 
 	return collectDevices(results), nil
 }
 
-// openPcapHandle opens a pcap handle with ARP BPF filter.
-func (s *ARPScanner) openPcapHandle() (*pcap.Handle, error) {
-	handle, err := pcap.OpenLive(s.iface.Name, 65536, true, pcap.BlockForever)
+// arpBPFFilter returns compiled BPF instructions that match ARP packets (EtherType 0x0806).
+func arpBPFFilter() []bpf.RawInstruction {
+	// Filter: match Ethernet frames with EtherType == ARP (0x0806)
+	instructions, _ := bpf.Assemble([]bpf.Instruction{
+		bpf.LoadAbsolute{Off: 12, Size: 2},                                   // load EtherType at offset 12
+		bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0806, SkipTrue: 1, SkipFalse: 0}, // if ARP, skip to accept
+		bpf.RetConstant{Val: 0},                                              // reject
+		bpf.RetConstant{Val: 0xffff},                                         // accept
+	})
+	return instructions
+}
+
+// openHandle opens an AF_PACKET handle with ARP BPF filter.
+func (s *ARPScanner) openHandle() (*afpacket.TPacket, error) {
+	handle, err := afpacket.NewTPacket(afpacket.OptInterface(s.iface.Name))
 	if err != nil {
-		return nil, fmt.Errorf("failed to open pcap handle: %w", err)
+		return nil, fmt.Errorf("failed to open AF_PACKET handle: %w", err)
 	}
-	if err := handle.SetBPFFilter("arp"); err != nil {
+	if err := handle.SetBPF(arpBPFFilter()); err != nil {
 		handle.Close()
 		return nil, fmt.Errorf("failed to set BPF filter: %w", err)
+	}
+	if err := handle.SetPromiscuous(true); err != nil {
+		handle.Close()
+		return nil, fmt.Errorf("failed to set promiscuous mode: %w", err)
 	}
 	return handle, nil
 }
 
 // sendARPRequests distributes IPs to worker goroutines for ARP request sending.
-func (s *ARPScanner) sendARPRequests(ctx context.Context, handle *pcap.Handle, ips []net.IP) {
+func (s *ARPScanner) sendARPRequests(ctx context.Context, handle *afpacket.TPacket, ips []net.IP) {
 	var wg sync.WaitGroup
 	ipChan := make(chan net.IP, len(ips))
 
@@ -165,7 +185,7 @@ func collectDevices(ch <-chan Device) []Device {
 }
 
 // arpWorker sends ARP requests for IPs from the channel.
-func (s *ARPScanner) arpWorker(ctx context.Context, handle *pcap.Handle, ips <-chan net.IP, retries int) {
+func (s *ARPScanner) arpWorker(ctx context.Context, handle *afpacket.TPacket, ips <-chan net.IP, retries int) {
 	for ip := range ips {
 		select {
 		case <-ctx.Done():
@@ -183,7 +203,7 @@ func (s *ARPScanner) arpWorker(ctx context.Context, handle *pcap.Handle, ips <-c
 }
 
 // sendARPRequest sends an ARP request for the target IP.
-func (s *ARPScanner) sendARPRequest(handle *pcap.Handle, targetIP net.IP) error {
+func (s *ARPScanner) sendARPRequest(handle *afpacket.TPacket, targetIP net.IP) error {
 	// Construct Ethernet frame
 	eth := layers.Ethernet{
 		SrcMAC:       s.localMAC,
@@ -219,8 +239,8 @@ func (s *ARPScanner) sendARPRequest(handle *pcap.Handle, targetIP net.IP) error 
 }
 
 // listenForResponses captures ARP responses and adds devices to results.
-func (s *ARPScanner) listenForResponses(ctx context.Context, handle *pcap.Handle, results chan<- Device, seen *sync.Map) {
-	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+func (s *ARPScanner) listenForResponses(ctx context.Context, handle *afpacket.TPacket, results chan<- Device, seen *sync.Map) {
+	packetSource := gopacket.NewPacketSource(handle, layers.LinkTypeEthernet)
 	packetSource.NoCopy = true
 
 	for {
