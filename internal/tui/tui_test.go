@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"net"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -32,8 +33,9 @@ func TestModelInit(t *testing.T) {
 	m := NewModel()
 	cmd := m.Init()
 
-	if cmd != nil {
-		t.Error("Expected nil command from Init")
+	// Init should return a command to discover subnets
+	if cmd == nil {
+		t.Error("Expected non-nil command from Init (subnet discovery)")
 	}
 }
 
@@ -743,6 +745,97 @@ func TestScanResultMsgSuccess(t *testing.T) {
 	}
 }
 
+func TestScanResultMsgGeneratesAlerts(t *testing.T) {
+	m := NewModel()
+	m.ready = true
+	m.width = 80
+	m.height = 24
+
+	// First scan — new device should generate a new_device alert
+	result := &scanner.ScanResult{
+		Devices: []scanner.Device{
+			{IP: net.ParseIP("192.168.1.1"), Status: scanner.StatusOnline},
+		},
+	}
+	msg := scanResultMsg{result: result, err: nil}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if len(updated.alerts) == 0 {
+		t.Error("Expected at least one alert for new device")
+	}
+	foundNewDevice := false
+	for _, a := range updated.alerts {
+		if a.Type == tracker.AlertNewDevice {
+			foundNewDevice = true
+		}
+	}
+	if !foundNewDevice {
+		t.Error("Expected AlertNewDevice alert type")
+	}
+}
+
+func TestScanResultMsgWithStoragePersistence(t *testing.T) {
+	// Create temporary storage
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	storage, err := tracker.NewStorage(dbPath, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+	defer storage.Close()
+
+	m := NewModelWithOrchestratorAndStorage(nil, "", storage)
+	m.ready = true
+	m.width = 80
+	m.height = 24
+
+	result := &scanner.ScanResult{
+		Devices: []scanner.Device{
+			{IP: net.ParseIP("192.168.1.1"), Status: scanner.StatusOnline},
+		},
+	}
+	msg := scanResultMsg{result: result, err: nil}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if len(updated.devices) != 1 {
+		t.Errorf("Expected 1 device, got %d", len(updated.devices))
+	}
+
+	// Verify devices were persisted
+	loaded, err := storage.LoadDevices()
+	if err != nil {
+		t.Fatalf("Failed to load devices: %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Errorf("Expected 1 persisted device, got %d", len(loaded))
+	}
+}
+
+func TestStorageLoadOnStartup(t *testing.T) {
+	// Create temporary storage and pre-populate
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	storage, err := tracker.NewStorage(dbPath, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+	defer storage.Close()
+
+	devices := []scanner.Device{
+		{IP: net.ParseIP("10.0.0.1"), Hostname: "stored-host", Status: scanner.StatusOnline},
+	}
+	if err := storage.SaveDevices(devices); err != nil {
+		t.Fatalf("Failed to save devices: %v", err)
+	}
+
+	// Create model — should load stored devices
+	m := NewModelWithOrchestratorAndStorage(nil, "", storage)
+
+	if len(m.devices) != 1 {
+		t.Errorf("Expected 1 device loaded from storage, got %d", len(m.devices))
+	}
+}
+
 func TestScanResultMsgError(t *testing.T) {
 	m := NewModel()
 	m.ready = true
@@ -759,6 +852,60 @@ func TestScanResultMsgError(t *testing.T) {
 	}
 }
 
+func TestDevicesToMaps(t *testing.T) {
+	devices := []scanner.Device{
+		{
+			IP:       net.ParseIP("192.168.1.1"),
+			MAC:      net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff},
+			Hostname: "host1",
+			Vendor:   "Vendor1",
+			Status:   scanner.StatusOnline,
+			Ports:    []int{80, 443},
+		},
+		{
+			IP:       net.ParseIP("10.0.0.1"),
+			Hostname: "host2",
+			Status:   scanner.StatusNew,
+		},
+	}
+
+	maps := devicesToMaps(devices)
+	if len(maps) != 2 {
+		t.Fatalf("Expected 2 maps, got %d", len(maps))
+	}
+
+	if maps[0]["ip"] != "192.168.1.1" {
+		t.Errorf("Expected ip '192.168.1.1', got '%v'", maps[0]["ip"])
+	}
+	if maps[0]["mac"] != "aa:bb:cc:dd:ee:ff" {
+		t.Errorf("Expected mac 'aa:bb:cc:dd:ee:ff', got '%v'", maps[0]["mac"])
+	}
+	if maps[0]["hostname"] != "host1" {
+		t.Errorf("Expected hostname 'host1', got '%v'", maps[0]["hostname"])
+	}
+	ports, ok := maps[0]["ports"].([]interface{})
+	if !ok || len(ports) != 2 {
+		t.Errorf("Expected 2 ports, got %v", maps[0]["ports"])
+	}
+
+	// Second device has no MAC
+	if _, hasMac := maps[1]["mac"]; hasMac {
+		t.Error("Expected no mac key for device without MAC")
+	}
+}
+
+func TestScriptEngineAPIBridgeWired(t *testing.T) {
+	m := NewModel()
+
+	if m.scriptEngine == nil {
+		t.Fatal("Expected scriptEngine to be initialized")
+	}
+	// The registry should be non-nil and the engine should have a real APIBridge
+	if m.registry == nil {
+		t.Fatal("Expected registry to be initialized")
+	}
+}
+
 func TestRenderDeviceList(t *testing.T) {
 	m := NewModel()
 	m.ready = true
@@ -772,5 +919,142 @@ func TestRenderDeviceList(t *testing.T) {
 	result := m.renderDeviceList()
 	if result == "" {
 		t.Error("Expected non-empty device list")
+	}
+}
+
+func TestSubnetDiscoverMsg(t *testing.T) {
+	m := NewModel()
+	m.ready = true
+	m.width = 80
+	m.height = 24
+
+	subnets := []scanner.SubnetInfo{
+		{Subnet: "192.168.1.0/24", Interface: "eth0", Local: true},
+		{Subnet: "10.0.0.0/24", Interface: "eth1", Local: true},
+	}
+	msg := subnetDiscoverMsg{subnets: subnets}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if len(updated.subnets) != 2 {
+		t.Errorf("Expected 2 subnets, got %d", len(updated.subnets))
+	}
+	if updated.subnet != "192.168.1.0/24" {
+		t.Errorf("Expected first subnet to be selected, got '%s'", updated.subnet)
+	}
+}
+
+func TestCycleSubnet(t *testing.T) {
+	m := NewModel()
+	m.ready = true
+	m.width = 80
+	m.height = 24
+	m.subnets = []scanner.SubnetInfo{
+		{Subnet: "192.168.1.0/24"},
+		{Subnet: "10.0.0.0/24"},
+	}
+	m.subnet = "192.168.1.0/24"
+	m.subnetIdx = 0
+
+	// Press 'n' to cycle
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.subnet != "10.0.0.0/24" {
+		t.Errorf("Expected subnet '10.0.0.0/24' after cycle, got '%s'", updated.subnet)
+	}
+	if updated.subnetIdx != 1 {
+		t.Errorf("Expected subnetIdx 1, got %d", updated.subnetIdx)
+	}
+
+	// Cycle again to wrap around
+	newModel, _ = updated.Update(msg)
+	updated = newModel.(Model)
+
+	if updated.subnet != "192.168.1.0/24" {
+		t.Errorf("Expected subnet '192.168.1.0/24' after wrap, got '%s'", updated.subnet)
+	}
+}
+
+func TestCycleSubnetEmpty(t *testing.T) {
+	m := NewModel()
+	m.ready = true
+	m.width = 80
+	m.height = 24
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if !strings.Contains(updated.status, "No subnets discovered") {
+		t.Errorf("Expected 'No subnets discovered' status, got '%s'", updated.status)
+	}
+}
+
+func TestSubnetDiscoverMsgError(t *testing.T) {
+	m := NewModel()
+	m.ready = true
+	m.width = 80
+	m.height = 24
+
+	msg := subnetDiscoverMsg{err: fmt.Errorf("no interfaces")}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if !strings.Contains(updated.status, "Subnet discovery failed") {
+		t.Errorf("Expected 'Subnet discovery failed' status, got '%s'", updated.status)
+	}
+	if len(updated.subnets) != 0 {
+		t.Errorf("Expected 0 subnets on error, got %d", len(updated.subnets))
+	}
+}
+
+func TestSubnetDiscoverMsgPreconfigured(t *testing.T) {
+	m := NewModel()
+	m.ready = true
+	m.width = 80
+	m.height = 24
+	m.subnet = "10.0.0.0/24" // preconfigured
+
+	subnets := []scanner.SubnetInfo{
+		{Subnet: "192.168.1.0/24"},
+		{Subnet: "10.0.0.0/24"},
+		{Subnet: "172.16.0.0/24"},
+	}
+	msg := subnetDiscoverMsg{subnets: subnets}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.subnetIdx != 1 {
+		t.Errorf("Expected subnetIdx 1 for preconfigured '10.0.0.0/24', got %d", updated.subnetIdx)
+	}
+	if updated.subnet != "10.0.0.0/24" {
+		t.Errorf("Expected subnet to remain '10.0.0.0/24', got '%s'", updated.subnet)
+	}
+}
+
+func TestCycleSubnetDuringScan(t *testing.T) {
+	m := NewModel()
+	m.ready = true
+	m.width = 80
+	m.height = 24
+	m.scanning = true
+	m.subnets = []scanner.SubnetInfo{
+		{Subnet: "192.168.1.0/24"},
+		{Subnet: "10.0.0.0/24"},
+	}
+	m.subnet = "192.168.1.0/24"
+	m.subnetIdx = 0
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if updated.subnet != "192.168.1.0/24" {
+		t.Errorf("Expected subnet unchanged during scan, got '%s'", updated.subnet)
+	}
+	if !strings.Contains(updated.status, "Cannot switch subnet during scan") {
+		t.Errorf("Expected 'Cannot switch subnet during scan' status, got '%s'", updated.status)
 	}
 }

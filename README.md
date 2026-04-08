@@ -139,6 +139,11 @@ The foundational structure is in place:
 
 See [PLAN.md](PLAN.md) for the complete implementation roadmap.
 
+## Known Limitations
+
+- **NAT Port Mapping**: NAT detection (type detection, public IP via STUN, UPnP/NAT-PMP discovery) is fully functional. However, NAT port mapping is not yet fully implemented. `AddPortMapping()` currently reports port-mapping failures rather than returning `ErrNATUnsupported`, and `RemovePortMapping()` currently performs no action and may return `nil`. NAT port mapping requires external gateway support and may be completed in a future release.
+- **Root/Admin Privileges**: ARP and ICMP scanning require raw socket access (root on Linux, admin on Windows). The tool gracefully degrades to TCP-only scanning when run without elevated permissions.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
