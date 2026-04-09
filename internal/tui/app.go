@@ -796,7 +796,7 @@ func (m Model) renderNetworkMap() string {
 			conn = "└──"
 		}
 
-		builder.WriteString(fmt.Sprintf("      %s %s %s (%s)\n", conn, status, device.IP, device.Hostname))
+		_, _ = fmt.Fprintf(&builder, "      %s %s %s (%s)\n", conn, status, device.IP, device.Hostname)
 	}
 
 	return m.styles.Border.Width(m.width - 4).Render(builder.String())
@@ -829,7 +829,7 @@ func (m Model) renderToolView() string {
 
 	// Show input field if tool is selected
 	if m.selectedTool >= 0 {
-		builder.WriteString(fmt.Sprintf("Tool: %s\n", m.tools[m.selectedTool].Name()))
+		_, _ = fmt.Fprintf(&builder, "Tool: %s\n", m.tools[m.selectedTool].Name())
 		builder.WriteString("Args: ")
 		builder.WriteString(m.toolInput.View())
 		builder.WriteString("\n\n")
@@ -851,7 +851,7 @@ func (m Model) renderToolView() string {
 func (m Model) renderScriptConsole() string {
 	var builder strings.Builder
 	builder.WriteString("Script Console (Tengo):\n\n")
-	builder.WriteString(fmt.Sprintf("Scripts directory: %s\n\n", m.scriptsDir))
+	_, _ = fmt.Fprintf(&builder, "Scripts directory: %s\n\n", m.scriptsDir)
 
 	// Show input
 	builder.WriteString("> ")

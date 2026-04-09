@@ -16,14 +16,13 @@ import (
 // ARPScanner implements ARP-based network scanning for device discovery.
 // It uses raw sockets via gopacket/pcap for fast layer 2 discovery.
 type ARPScanner struct {
-	iface     *net.Interface
-	workers   int
-	timeout   time.Duration
-	retries   int
-	localIP   net.IP
-	localMAC  net.HardwareAddr
-	ouiDB     OUIDatabase
-	ouiDBOnce sync.Once
+	iface    *net.Interface
+	workers  int
+	timeout  time.Duration
+	retries  int
+	localIP  net.IP
+	localMAC net.HardwareAddr
+	ouiDB    OUIDatabase
 }
 
 // OUIDatabase provides MAC vendor lookup functionality.

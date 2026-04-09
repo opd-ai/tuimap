@@ -159,7 +159,9 @@ func (t *WhoisTool) query(ctx context.Context, server, query string) (string, er
 	defer conn.Close()
 
 	// Set deadline for the entire operation
-	conn.SetDeadline(time.Now().Add(t.timeout))
+	if err := conn.SetDeadline(time.Now().Add(t.timeout)); err != nil {
+		return "", fmt.Errorf("failed to set connection deadline: %w", err)
+	}
 
 	// Send query (CRLF terminated per RFC 3912)
 	_, err = fmt.Fprintf(conn, "%s\r\n", query)
