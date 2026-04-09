@@ -422,7 +422,9 @@ func BenchmarkRegistryGetDevice(b *testing.B) {
 	_ = r.Update(devices)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = r.GetDevice("192.168.1.1")
+		if _, err := r.GetDevice("192.168.1.1"); err != nil {
+			b.Fatalf("GetDevice failed: %v", err)
+		}
 	}
 }
 
@@ -480,14 +482,19 @@ func BenchmarkRegistryExport(b *testing.B) {
 	_ = r.Update(devices)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = r.Export()
+		if _, err := r.Export(); err != nil {
+			b.Fatalf("Export failed: %v", err)
+		}
 	}
 }
 
 func BenchmarkStorageSaveDevice(b *testing.B) {
 	tmpDir := b.TempDir()
 	dbPath := filepath.Join(tmpDir, "bench.db")
-	storage, _ := NewStorage(dbPath, 24*time.Hour)
+	storage, err := NewStorage(dbPath, 24*time.Hour)
+	if err != nil {
+		b.Fatalf("Failed to create storage: %v", err)
+	}
 	defer func() { _ = storage.Close() }()
 
 	device := scanner.Device{
@@ -499,14 +506,19 @@ func BenchmarkStorageSaveDevice(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = storage.SaveDevice(device)
+		if err := storage.SaveDevice(device); err != nil {
+			b.Fatalf("SaveDevice failed: %v", err)
+		}
 	}
 }
 
 func BenchmarkStorageLoadDevices(b *testing.B) {
 	tmpDir := b.TempDir()
 	dbPath := filepath.Join(tmpDir, "bench.db")
-	storage, _ := NewStorage(dbPath, 24*time.Hour)
+	storage, err := NewStorage(dbPath, 24*time.Hour)
+	if err != nil {
+		b.Fatalf("Failed to create storage: %v", err)
+	}
 	defer func() { _ = storage.Close() }()
 
 	// Pre-populate with devices
@@ -515,12 +527,16 @@ func BenchmarkStorageLoadDevices(b *testing.B) {
 			IP:       net.ParseIP("192.168.1." + string(rune(i%256))),
 			Metadata: make(map[string]interface{}),
 		}
-		_ = storage.SaveDevice(device)
+		if err := storage.SaveDevice(device); err != nil {
+			b.Fatalf("SaveDevice failed during setup: %v", err)
+		}
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = storage.LoadDevices()
+		if _, err := storage.LoadDevices(); err != nil {
+			b.Fatalf("LoadDevices failed: %v", err)
+		}
 	}
 }
 
