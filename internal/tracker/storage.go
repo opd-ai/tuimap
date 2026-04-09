@@ -71,7 +71,7 @@ func NewStorage(dbPath string, retention time.Duration) (*Storage, error) {
 		return nil
 	})
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to create buckets: %w", err)
 	}
 

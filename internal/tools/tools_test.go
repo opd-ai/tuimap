@@ -1260,7 +1260,7 @@ func TestNetcatUDPMode(t *testing.T) {
 		if err != nil || n == 0 {
 			return
 		}
-		conn.WriteToUDP([]byte("UDP Response\n"), remoteAddr)
+		_, _ = conn.WriteToUDP([]byte("UDP Response\n"), remoteAddr)
 	}()
 
 	nc := NewNetcatTool(2 * time.Second)

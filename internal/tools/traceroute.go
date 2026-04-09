@@ -101,7 +101,7 @@ func (t *TracerouteTool) runTraceroute(ctx context.Context, host string, maxHops
 func (t *TracerouteTool) resolveIPv4(host string) (net.IP, error) {
 	ips, err := net.LookupIP(host)
 	if err != nil {
-		return nil, fmt.Errorf("traceroute: unknown host %s\n", host)
+		return nil, fmt.Errorf("traceroute: unknown host %s", host)
 	}
 
 	for _, ip := range ips {
@@ -109,7 +109,7 @@ func (t *TracerouteTool) resolveIPv4(host string) (net.IP, error) {
 			return ip4, nil
 		}
 	}
-	return nil, fmt.Errorf("traceroute: no IPv4 address found for %s\n", host)
+	return nil, fmt.Errorf("traceroute: no IPv4 address found for %s", host)
 }
 
 // Hop represents a single hop in the traceroute.
@@ -279,7 +279,7 @@ func (t *TracerouteTool) probeUDP(dest net.IP, ttl int) Hop {
 
 	// Try to determine if we reached the destination
 	if tcpConn, err := net.DialTimeout("tcp", net.JoinHostPort(dest.String(), "80"), 100*time.Millisecond); err == nil {
-		tcpConn.Close()
+		_ = tcpConn.Close()
 		return Hop{IP: dest, RTT: rtt, Reached: true}
 	}
 

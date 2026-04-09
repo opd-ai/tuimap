@@ -74,7 +74,7 @@ func (t *DigTool) Execute(ctx context.Context, args []string) (<-chan string, er
 		defer close(output)
 
 		output <- fmt.Sprintf("; <<>> dig %s %s\n", hostname, queryType)
-		output <- fmt.Sprintf(";; Query time: ")
+		output <- ";; Query time: "
 
 		start := time.Now()
 
