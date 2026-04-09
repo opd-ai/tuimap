@@ -230,6 +230,7 @@ func TestTruncate(t *testing.T) {
 		{"ab", 1, "…"},
 		{"", 5, ""},
 		{"日本語テスト", 4, "日本語…"},
+		{"日本語テスト", 3, "日本…"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
