@@ -767,39 +767,10 @@ func (m Model) renderTabs() string {
 	return strings.Join(rendered, " | ")
 }
 
-// renderNetworkMap renders the network map view.
+// renderNetworkMap renders the network map view with a visual network diagram.
 func (m Model) renderNetworkMap() string {
-	if len(m.devices) == 0 {
-		return m.styles.Border.Render("No devices discovered. Press 's' to scan.")
-	}
-
-	var builder strings.Builder
-	builder.WriteString("Network Topology:\n\n")
-
-	// Simple ASCII representation
-	builder.WriteString("  [Gateway]\n")
-	builder.WriteString("      │\n")
-
-	for i, device := range m.devices {
-		status := "●"
-		switch device.Status {
-		case scanner.StatusOnline:
-			status = m.styles.Online.Render("●")
-		case scanner.StatusOffline:
-			status = m.styles.Offline.Render("○")
-		case scanner.StatusNew:
-			status = m.styles.New.Render("★")
-		}
-
-		conn := "├──"
-		if i == len(m.devices)-1 {
-			conn = "└──"
-		}
-
-		_, _ = fmt.Fprintf(&builder, "      %s %s %s (%s)\n", conn, status, device.IP, device.Hostname)
-	}
-
-	return m.styles.Border.Width(m.width - 4).Render(builder.String())
+	content := renderDiagram(m.devices, m.scanResult, m.width)
+	return m.styles.Border.Width(m.width - 4).Render(content)
 }
 
 // renderDeviceList renders the device list view.
