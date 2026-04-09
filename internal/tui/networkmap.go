@@ -82,17 +82,11 @@ func classifyDevice(device scanner.Device, gatewayIP net.IP) DeviceRole {
 
 // isLikelyRouter uses heuristics to detect router-like devices.
 func isLikelyRouter(device scanner.Device) bool {
-	// Check hostname for router-like patterns
+	// Check hostname for router-like patterns using word boundary matching
+	// to avoid false positives (e.g. "laptop" matching "ap").
 	hostname := strings.ToLower(device.Hostname)
-	routerKeywords := []string{"router", "gateway", "switch", "firewall"}
+	routerKeywords := []string{"router", "gateway", "gw", "ap", "switch", "fw", "firewall"}
 	for _, keyword := range routerKeywords {
-		if strings.Contains(hostname, keyword) {
-			return true
-		}
-	}
-	// Match short abbreviations only at word boundaries (hyphen, dot, start, end)
-	shortKeywords := []string{"gw", "ap", "fw"}
-	for _, keyword := range shortKeywords {
 		if matchWordBoundary(hostname, keyword) {
 			return true
 		}
@@ -269,6 +263,12 @@ func renderInternet(ds diagramStyles) string {
 	return ds.internet.Render("    ☁  Internet")
 }
 
+// gatewayBoxInnerWidth is the character width inside the gateway box.
+// The box content is: " <status> <label> <role> " where label is truncated
+// to gatewayLabelMaxLen to fit within the fixed-width box.
+const gatewayBoxInnerWidth = 22
+const gatewayLabelMaxLen = 14
+
 // renderGatewayNode draws a single gateway node with box.
 func renderGatewayNode(node NetworkNode, ds diagramStyles) string {
 	statusIcon := statusIndicator(node.Device.Status, ds)
@@ -276,11 +276,15 @@ func renderGatewayNode(node NetworkNode, ds diagramStyles) string {
 	label := node.Label
 	role := ds.roleTag.Render("[Gateway]")
 
-	return fmt.Sprintf("    %s ╔══════════════════════╗\n      ║ %s %s %s ║\n      ╚══════════════════════╝",
+	border := strings.Repeat("═", gatewayBoxInnerWidth)
+
+	return fmt.Sprintf("    %s ╔%s╗\n      ║ %s %s %s ║\n      ╚%s╝",
 		ds.line.Render("  "),
+		border,
 		statusIcon,
-		ds.gateway.Render(truncate(label, 14)),
+		ds.gateway.Render(truncate(label, gatewayLabelMaxLen)),
 		role,
+		border,
 	) + "\n" + ds.dimmed.Render(fmt.Sprintf("          %s", ip))
 }
 
