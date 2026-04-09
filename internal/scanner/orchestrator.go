@@ -117,7 +117,7 @@ func (o *Orchestrator) Scan(ctx context.Context, subnet string) (*ScanResult, er
 
 // deviceKey returns a unique key for a device (prefer MAC, fall back to IP).
 func deviceKey(d *Device) string {
-	if d.MAC != nil && len(d.MAC) > 0 {
+	if len(d.MAC) > 0 {
 		return d.MAC.String()
 	}
 	return d.IP.String()

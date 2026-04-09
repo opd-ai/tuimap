@@ -846,7 +846,7 @@ func TestCreateDefaultOrchestrator(t *testing.T) {
 	}
 
 	if orch == nil {
-		t.Error("Expected non-nil orchestrator even with errors")
+		t.Fatal("Expected non-nil orchestrator even with errors")
 	}
 
 	// Should have at least TCP and ICMP scanners (they don't require interface)

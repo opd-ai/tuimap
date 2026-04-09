@@ -192,16 +192,6 @@ func (s *ICMPScanner) pingWorker(ctx context.Context, ips <-chan net.IP, results
 	}
 }
 
-// ping sends ICMP echo requests to the target IP and returns true if it responds.
-// This method creates new connections per host (used when worker-level conn reuse is not possible).
-func (s *ICMPScanner) ping(ctx context.Context, ip net.IP) bool {
-	// Try privileged ICMP first, fall back to UDP
-	if s.pingPrivileged(ctx, ip) {
-		return true
-	}
-	return s.pingUnprivileged(ctx, ip)
-}
-
 // pingWithConn sends ICMP echo requests using an existing connection.
 func (s *ICMPScanner) pingWithConn(ctx context.Context, ip net.IP, conn *icmp.PacketConn, privileged bool) bool {
 	setConnDeadline(conn, ctx, s.timeout)
@@ -242,26 +232,4 @@ func (s *ICMPScanner) pingWithConn(ctx context.Context, ip net.IP, conn *icmp.Pa
 	}
 
 	return false
-}
-
-// pingPrivileged uses raw ICMP sockets (requires root).
-func (s *ICMPScanner) pingPrivileged(ctx context.Context, ip net.IP) bool {
-	conn, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
-	if err != nil {
-		return false
-	}
-	defer conn.Close()
-
-	return s.pingWithConn(ctx, ip, conn, true)
-}
-
-// pingUnprivileged uses UDP-based ICMP (no root required).
-func (s *ICMPScanner) pingUnprivileged(ctx context.Context, ip net.IP) bool {
-	conn, err := icmp.ListenPacket("udp4", "")
-	if err != nil {
-		return false
-	}
-	defer conn.Close()
-
-	return s.pingWithConn(ctx, ip, conn, false)
 }

@@ -55,7 +55,7 @@ func TestRegistryGetDevice(t *testing.T) {
 		},
 	}
 
-	r.Update(devices)
+	_ = r.Update(devices)
 
 	device, err := r.GetDevice("192.168.1.1")
 	if err != nil {
@@ -87,7 +87,7 @@ func TestRegistryAlertOnNewDevice(t *testing.T) {
 		},
 	}
 
-	r.Update(devices)
+	_ = r.Update(devices)
 
 	// Give alert channel time to receive
 	time.Sleep(10 * time.Millisecond)
@@ -113,7 +113,7 @@ func TestRegistryDeviceStatusChange(t *testing.T) {
 			Hostname: "test-host",
 		},
 	}
-	r.Update(devices)
+	_ = r.Update(devices)
 
 	// Get initial alert
 	r.GetAlerts()
@@ -122,7 +122,7 @@ func TestRegistryDeviceStatusChange(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Update without the device
-	r.Update([]scanner.Device{})
+	_ = r.Update([]scanner.Device{})
 
 	// Check device is marked offline
 	device, _ := r.GetDevice("192.168.1.1")
@@ -141,7 +141,7 @@ func TestRegistryPortChange(t *testing.T) {
 			Ports: []int{80},
 		},
 	}
-	r.Update(devices)
+	_ = r.Update(devices)
 	r.GetAlerts() // Clear initial alert
 
 	// Second update with different ports
@@ -151,7 +151,7 @@ func TestRegistryPortChange(t *testing.T) {
 			Ports: []int{80, 443, 22},
 		},
 	}
-	r.Update(devices)
+	_ = r.Update(devices)
 
 	// Give alert channel time
 	time.Sleep(10 * time.Millisecond)
@@ -178,7 +178,7 @@ func TestRegistryOnlineCount(t *testing.T) {
 		{IP: net.ParseIP("192.168.1.2")},
 		{IP: net.ParseIP("192.168.1.3")},
 	}
-	r.Update(devices)
+	_ = r.Update(devices)
 
 	if r.OnlineCount() != 3 {
 		t.Errorf("Expected 3 online devices, got %d", r.OnlineCount())
@@ -192,7 +192,7 @@ func TestRegistryClear(t *testing.T) {
 		{IP: net.ParseIP("192.168.1.1")},
 		{IP: net.ParseIP("192.168.1.2")},
 	}
-	r.Update(devices)
+	_ = r.Update(devices)
 
 	r.Clear()
 
@@ -210,7 +210,7 @@ func TestRegistryExport(t *testing.T) {
 			Hostname: "test-host",
 		},
 	}
-	r.Update(devices)
+	_ = r.Update(devices)
 
 	data, err := r.Export()
 	if err != nil {
@@ -252,7 +252,7 @@ func TestStorageCreateAndClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	// Verify file was created
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
@@ -268,7 +268,7 @@ func TestStorageSaveAndLoadDevice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	device := scanner.Device{
 		IP:       net.ParseIP("192.168.1.1"),
@@ -309,7 +309,7 @@ func TestStorageSaveAndLoadAlert(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	alert := Alert{
 		Type: AlertNewDevice,
@@ -353,7 +353,7 @@ func TestStorageSaveDevices(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	devices := []scanner.Device{
 		{IP: net.ParseIP("192.168.1.1"), Metadata: make(map[string]interface{})},
@@ -410,7 +410,7 @@ func BenchmarkRegistryUpdate(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		r.Update(devices)
+		_ = r.Update(devices)
 	}
 }
 
@@ -419,10 +419,10 @@ func BenchmarkRegistryGetDevice(b *testing.B) {
 	devices := []scanner.Device{
 		{IP: net.ParseIP("192.168.1.1")},
 	}
-	r.Update(devices)
+	_ = r.Update(devices)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		r.GetDevice("192.168.1.1")
+		_, _ = r.GetDevice("192.168.1.1")
 	}
 }
 
@@ -434,7 +434,7 @@ func BenchmarkRegistryGetDevices(b *testing.B) {
 			IP: net.ParseIP("192.168.1." + string(rune(i%256))),
 		}
 	}
-	r.Update(devices)
+	_ = r.Update(devices)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		r.GetDevices()
@@ -447,7 +447,7 @@ func BenchmarkRegistryCount(b *testing.B) {
 	for i := 0; i < 50; i++ {
 		devices[i] = scanner.Device{IP: net.ParseIP("192.168.1.1")}
 	}
-	r.Update(devices)
+	_ = r.Update(devices)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		r.Count()
@@ -460,7 +460,7 @@ func BenchmarkRegistryOnlineCount(b *testing.B) {
 	for i := 0; i < 50; i++ {
 		devices[i] = scanner.Device{IP: net.ParseIP("192.168.1.1")}
 	}
-	r.Update(devices)
+	_ = r.Update(devices)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		r.OnlineCount()
@@ -477,10 +477,10 @@ func BenchmarkRegistryExport(b *testing.B) {
 			Ports:    []int{80, 443},
 		}
 	}
-	r.Update(devices)
+	_ = r.Update(devices)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		r.Export()
+		_, _ = r.Export()
 	}
 }
 
@@ -488,7 +488,7 @@ func BenchmarkStorageSaveDevice(b *testing.B) {
 	tmpDir := b.TempDir()
 	dbPath := filepath.Join(tmpDir, "bench.db")
 	storage, _ := NewStorage(dbPath, 24*time.Hour)
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	device := scanner.Device{
 		IP:       net.ParseIP("192.168.1.1"),
@@ -499,7 +499,7 @@ func BenchmarkStorageSaveDevice(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		storage.SaveDevice(device)
+		_ = storage.SaveDevice(device)
 	}
 }
 
@@ -507,7 +507,7 @@ func BenchmarkStorageLoadDevices(b *testing.B) {
 	tmpDir := b.TempDir()
 	dbPath := filepath.Join(tmpDir, "bench.db")
 	storage, _ := NewStorage(dbPath, 24*time.Hour)
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	// Pre-populate with devices
 	for i := 0; i < 100; i++ {
@@ -515,12 +515,12 @@ func BenchmarkStorageLoadDevices(b *testing.B) {
 			IP:       net.ParseIP("192.168.1." + string(rune(i%256))),
 			Metadata: make(map[string]interface{}),
 		}
-		storage.SaveDevice(device)
+		_ = storage.SaveDevice(device)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		storage.LoadDevices()
+		_, _ = storage.LoadDevices()
 	}
 }
 
@@ -531,7 +531,7 @@ func BenchmarkAlertGeneration(b *testing.B) {
 		devices := []scanner.Device{
 			{IP: net.ParseIP("192.168.1." + string(rune(i%256)))},
 		}
-		r.Update(devices)
+		_ = r.Update(devices)
 		r.GetAlerts() // Drain alerts
 	}
 }
@@ -544,7 +544,7 @@ func TestRegistryGetDevices(t *testing.T) {
 		{IP: net.ParseIP("192.168.1.2"), Hostname: "host2"},
 		{IP: net.ParseIP("192.168.1.3"), Hostname: "host3"},
 	}
-	r.Update(devices)
+	_ = r.Update(devices)
 
 	result := r.GetDevices()
 	if len(result) != 3 {
@@ -587,7 +587,7 @@ func TestRegistryDetectChangesPortChange(t *testing.T) {
 			Ports: []int{22},
 		},
 	}
-	r.Update(devices1)
+	_ = r.Update(devices1)
 	r.GetAlerts() // Clear new device alert
 
 	// Second update with additional ports
@@ -597,7 +597,7 @@ func TestRegistryDetectChangesPortChange(t *testing.T) {
 			Ports: []int{22, 80, 443},
 		},
 	}
-	r.Update(devices2)
+	_ = r.Update(devices2)
 
 	time.Sleep(10 * time.Millisecond)
 	alerts := r.GetAlerts()
@@ -622,14 +622,14 @@ func TestRegistryDetectChangesOffline(t *testing.T) {
 	devices := []scanner.Device{
 		{IP: net.ParseIP("192.168.1.1")},
 	}
-	r.Update(devices)
+	_ = r.Update(devices)
 	r.GetAlerts() // Clear new device alert
 
 	// Wait past threshold
 	time.Sleep(10 * time.Millisecond)
 
 	// Update with empty list
-	r.Update([]scanner.Device{})
+	_ = r.Update([]scanner.Device{})
 
 	time.Sleep(10 * time.Millisecond)
 	alerts := r.GetAlerts()
@@ -655,14 +655,14 @@ func TestStorageCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	// Save a device
 	device := scanner.Device{
 		IP:       net.ParseIP("192.168.1.1"),
 		Metadata: make(map[string]interface{}),
 	}
-	storage.SaveDevice(device)
+	_ = storage.SaveDevice(device)
 
 	// Wait for retention period
 	time.Sleep(10 * time.Millisecond)
@@ -682,7 +682,7 @@ func TestNewRegistryWithStorage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	// Create registry (storage is not a parameter)
 	r := NewRegistry(5 * time.Minute)
