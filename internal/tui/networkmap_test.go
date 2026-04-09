@@ -229,6 +229,7 @@ func TestTruncate(t *testing.T) {
 		{"hello world", 5, "hell…"},
 		{"ab", 1, "…"},
 		{"", 5, ""},
+		{"日本語テスト", 4, "日本語…"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
@@ -248,8 +249,8 @@ func TestFormatPorts(t *testing.T) {
 	}{
 		{"empty", nil, 3, ""},
 		{"one port", []int{80}, 3, "80"},
-		{"within limit", []int{80, 443}, 3, "80,443"},
-		{"exceeds limit", []int{80, 443, 8080, 8443}, 3, "80,443,8080+1"},
+		{"within limit", []int{443, 80}, 3, "80,443"},
+		{"exceeds limit sorted", []int{8443, 80, 443, 8080}, 3, "80,443,8080+1"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -257,6 +258,14 @@ func TestFormatPorts(t *testing.T) {
 				t.Errorf("formatPorts() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestFormatPortsDoesNotMutateInput(t *testing.T) {
+	ports := []int{8080, 22, 443}
+	_ = formatPorts(ports, 2)
+	if ports[0] != 8080 || ports[1] != 22 || ports[2] != 443 {
+		t.Errorf("formatPorts mutated input slice: %v", ports)
 	}
 }
 
@@ -399,6 +408,7 @@ func TestNewDiagramStyles(t *testing.T) {
 	_ = ds.online.Render("test")
 	_ = ds.offline.Render("test")
 	_ = ds.newDev.Render("test")
+	_ = ds.changed.Render("test")
 	_ = ds.line.Render("test")
 	_ = ds.dimmed.Render("test")
 	_ = ds.header.Render("test")
@@ -425,6 +435,10 @@ func TestRenderDiagramAllStatuses(t *testing.T) {
 	}
 	if !strings.Contains(result, "△") {
 		t.Error("Expected changed indicator")
+	}
+	// Legend should include changed status
+	if !strings.Contains(result, "changed") {
+		t.Error("Expected 'changed' in legend")
 	}
 }
 

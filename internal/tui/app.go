@@ -769,8 +769,12 @@ func (m Model) renderTabs() string {
 
 // renderNetworkMap renders the network map view with a visual network diagram.
 func (m Model) renderNetworkMap() string {
-	content := renderDiagram(m.devices, m.scanResult, m.width)
-	return m.styles.Border.Width(m.width - 4).Render(content)
+	contentWidth := m.width - 4
+	if contentWidth < 0 {
+		contentWidth = 0
+	}
+	content := renderDiagram(m.devices, m.scanResult, contentWidth)
+	return m.styles.Border.Width(contentWidth).Render(content)
 }
 
 // renderDeviceList renders the device list view.

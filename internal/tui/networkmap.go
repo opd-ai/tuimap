@@ -105,7 +105,7 @@ func isLikelyRouter(device scanner.Device) bool {
 		}
 	}
 
-	// Check for common router ports (SSH, HTTP, HTTPS, DNS, DHCP, SNMP)
+	// Check for router/network-infrastructure ports (DNS, DHCP, SNMP, BGP)
 	routerPorts := map[int]bool{53: true, 67: true, 68: true, 161: true, 179: true}
 	routerPortCount := 0
 	for _, port := range device.Ports {
@@ -143,6 +143,7 @@ type diagramStyles struct {
 	online   lipgloss.Style
 	offline  lipgloss.Style
 	newDev   lipgloss.Style
+	changed  lipgloss.Style
 	line     lipgloss.Style
 	dimmed   lipgloss.Style
 	header   lipgloss.Style
@@ -166,6 +167,8 @@ func newDiagramStyles() diagramStyles {
 			Foreground(lipgloss.Color("196")),
 		newDev: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("226")),
+		changed: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("214")),
 		line: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240")),
 		dimmed: lipgloss.NewStyle().
@@ -263,27 +266,42 @@ func renderInternet(ds diagramStyles) string {
 	return ds.internet.Render("    ☁  Internet")
 }
 
-// gatewayBoxInnerWidth is the character width inside the gateway box.
-// The box content is: " <status> <label> <role> " where label is truncated
-// to gatewayLabelMaxLen to fit within the fixed-width box.
-const gatewayBoxInnerWidth = 22
+// gatewayBoxMinWidth is the minimum character width inside the gateway box.
+// The actual box width is computed from the rendered content width so the
+// border always matches the visible text, while labels are still truncated to
+// gatewayLabelMaxLen to avoid unnecessary growth.
+const gatewayBoxMinWidth = 22
 const gatewayLabelMaxLen = 14
+
+// padRightWidth pads s with spaces on the right so its visible width equals width.
+func padRightWidth(s string, width int) string {
+	padding := width - lipgloss.Width(s)
+	if padding <= 0 {
+		return s
+	}
+	return s + strings.Repeat(" ", padding)
+}
 
 // renderGatewayNode draws a single gateway node with box.
 func renderGatewayNode(node NetworkNode, ds diagramStyles) string {
 	statusIcon := statusIndicator(node.Device.Status, ds)
 	ip := node.Device.IP.String()
-	label := node.Label
+	label := ds.gateway.Render(truncate(node.Label, gatewayLabelMaxLen))
 	role := ds.roleTag.Render("[Gateway]")
 
-	border := strings.Repeat("═", gatewayBoxInnerWidth)
+	content := fmt.Sprintf("%s %s %s", statusIcon, label, role)
+	boxInnerWidth := lipgloss.Width(content) + 2
+	if boxInnerWidth < gatewayBoxMinWidth {
+		boxInnerWidth = gatewayBoxMinWidth
+	}
 
-	return fmt.Sprintf("    %s ╔%s╗\n      ║ %s %s %s ║\n      ╚%s╝",
+	border := strings.Repeat("═", boxInnerWidth)
+	paddedContent := padRightWidth(content, boxInnerWidth-2)
+
+	return fmt.Sprintf("    %s ╔%s╗\n      ║ %s ║\n      ╚%s╝",
 		ds.line.Render("  "),
 		border,
-		statusIcon,
-		ds.gateway.Render(truncate(label, gatewayLabelMaxLen)),
-		role,
+		paddedContent,
 		border,
 	) + "\n" + ds.dimmed.Render(fmt.Sprintf("          %s", ip))
 }
@@ -353,7 +371,8 @@ func renderLegend(ds diagramStyles) string {
 		"  Legend: " +
 			ds.online.Render("●") + " online  " +
 			ds.offline.Render("○") + " offline  " +
-			ds.newDev.Render("★") + " new",
+			ds.newDev.Render("★") + " new  " +
+			ds.changed.Render("△") + " changed",
 	)
 }
 
@@ -367,7 +386,7 @@ func statusIndicator(status scanner.DeviceStatus, ds diagramStyles) string {
 	case scanner.StatusNew:
 		return ds.newDev.Render("★")
 	case scanner.StatusChanged:
-		return ds.newDev.Render("△")
+		return ds.changed.Render("△")
 	default:
 		return ds.dimmed.Render("?")
 	}
@@ -388,15 +407,18 @@ func partitionNodes(nodes []NetworkNode) (gateways, routers, clients []NetworkNo
 	return
 }
 
-// truncate limits a string to maxLen characters, appending "…" if truncated.
+// truncate limits a string to maxLen runes, appending "…" if truncated.
+// It operates on rune count rather than byte length to avoid splitting
+// multi-byte UTF-8 characters.
 func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
 	if maxLen <= 1 {
 		return "…"
 	}
-	return s[:maxLen-1] + "…"
+	return string(runes[:maxLen-1]) + "…"
 }
 
 // matchWordBoundary checks if keyword appears in s as a whole word,
@@ -429,16 +451,21 @@ func isBoundary(b byte) bool {
 	return b == '-' || b == '.' || b == '_' || b == ' '
 }
 
-// formatPorts returns a compact string of the first n ports.
+// formatPorts returns a compact string of the first n ports, sorted
+// numerically for stable display regardless of scan order.
 func formatPorts(ports []int, maxShow int) string {
 	if len(ports) == 0 {
 		return ""
 	}
-	show := ports
+	sorted := make([]int, len(ports))
+	copy(sorted, ports)
+	sort.Ints(sorted)
+
+	show := sorted
 	suffix := ""
-	if len(ports) > maxShow {
-		show = ports[:maxShow]
-		suffix = fmt.Sprintf("+%d", len(ports)-maxShow)
+	if len(sorted) > maxShow {
+		show = sorted[:maxShow]
+		suffix = fmt.Sprintf("+%d", len(sorted)-maxShow)
 	}
 	strs := make([]string, len(show))
 	for i, p := range show {
