@@ -331,8 +331,8 @@ Creates a netcat (nc) tool for TCP/UDP connections.
 // TCPConnect establishes a TCP connection
 func (n *NetcatTool) TCPConnect(ctx context.Context, host string, port int) (bool, time.Duration, error)
 
-// UDPSend sends UDP data
-func (n *NetcatTool) UDPSend(ctx context.Context, host string, port int, data []byte) error
+// Banner attempts to grab the service banner
+func (n *NetcatTool) Banner(ctx context.Context, host string, port int) (string, error)
 ```
 
 ### Telnet Tool
@@ -374,19 +374,9 @@ Creates a DNS query tool.
 ```go
 // LookupIP performs A/AAAA record lookup
 func (d *DigTool) LookupIP(ctx context.Context, hostname string) ([]net.IP, error)
-
-// LookupMX performs MX record lookup
-func (d *DigTool) LookupMX(ctx context.Context, hostname string) ([]*net.MX, error)
-
-// LookupTXT performs TXT record lookup
-func (d *DigTool) LookupTXT(ctx context.Context, hostname string) ([]string, error)
-
-// LookupNS performs NS record lookup
-func (d *DigTool) LookupNS(ctx context.Context, hostname string) ([]*net.NS, error)
-
-// LookupCNAME performs CNAME record lookup
-func (d *DigTool) LookupCNAME(ctx context.Context, hostname string) (string, error)
 ```
+
+> **Note:** The Dig tool also supports MX, TXT, NS, CNAME, and PTR record lookups through the `Execute` method with the appropriate record type argument (e.g., `dig example.com MX`).
 
 ### Whois Tool
 
@@ -407,28 +397,31 @@ The script package provides Tengo scripting engine integration.
 ### Engine
 
 ```go
-func NewEngine(maxExecTime time.Duration, maxMemory int64) *Engine
+func NewTengoEngine(maxTime time.Duration, maxMemoryMB int) *TengoEngine
 ```
 
 Creates a new scripting engine.
 
 **Parameters:**
-- `maxExecTime`: Maximum script execution time (default: 30s)
-- `maxMemory`: Maximum memory usage (default: 50MB)
+- `maxTime`: Maximum script execution time (default: 30s)
+- `maxMemoryMB`: Maximum memory usage in megabytes (default: 50)
 
 **Methods:**
 ```go
 // Run executes a script from string
-func (e *Engine) Run(ctx context.Context, script string) (interface{}, error)
+func (e *TengoEngine) Run(ctx context.Context, source string) error
 
-// RunFile executes a script from file
-func (e *Engine) RunFile(ctx context.Context, path string) (interface{}, error)
+// LoadFile loads and executes a script from file
+func (e *TengoEngine) LoadFile(ctx context.Context, path string) error
 
-// SetScanner sets the scanner for network operations
-func (e *Engine) SetScanner(s *scanner.Orchestrator)
+// SetAPIBridge sets the API bridge for network and device operations
+func (e *TengoEngine) SetAPIBridge(api *APIBridge)
 
-// SetRegistry sets the registry for device operations
-func (e *Engine) SetRegistry(r *tracker.Registry)
+// Stop stops all running scripts
+func (e *TengoEngine) Stop()
+
+// IsRunning returns whether a script is currently running
+func (e *TengoEngine) IsRunning() bool
 ```
 
 ### Script APIs
@@ -438,18 +431,20 @@ Functions exposed to Tengo scripts:
 **Network:**
 - `scan()` - Run network scan
 - `ping(host)` - Ping a host
-- `port_scan(host, ports)` - Scan specific ports
+- `portScan(host, ports)` - Scan specific ports
 - `resolve(hostname)` - DNS resolution
 
 **Devices:**
-- `get_devices()` - Get all devices
-- `get_device(ip)` - Get specific device
-- `alert(type, message)` - Generate alert
+- `getDevices()` - Get all devices
+- `alert(level, message)` - Generate alert
 
 **Storage:**
 - `set(key, value)` - Store value
 - `get(key)` - Get value
-- `delete(key)` - Delete value
+
+**Utility:**
+- `print(args...)` - Print output
+- `println(args...)` - Print output with newline
 
 ---
 
@@ -461,40 +456,48 @@ The NAT package provides NAT detection and traversal.
 
 ### Functions
 
-#### NewDetector
+#### NewClient
 
 ```go
-func NewDetector(config *config.NATConfig) *Detector
+func NewClient(stunServers ...string) *Client
 ```
 
-Creates a NAT detector.
+Creates a new NAT client. If no STUN servers are provided, uses default servers
+(stun.l.google.com:19302, stun1.l.google.com:19302, stun.cloudflare.com:3478).
 
 **Methods:**
 ```go
-// Detect performs NAT detection
-func (d *Detector) Detect(ctx context.Context) (*NATInfo, error)
+// Discover finds NAT devices and determines NAT type
+func (c *Client) Discover(ctx context.Context) (*Info, error)
 
-// GetPublicIP returns public IP via STUN
-func (d *Detector) GetPublicIP(ctx context.Context) (net.IP, error)
+// GetExternalIP returns the public IP address via STUN
+func (c *Client) GetExternalIP(ctx context.Context) (net.IP, error)
 
-// GetGateway returns the default gateway
-func (d *Detector) GetGateway() (net.IP, error)
+// AddPortMapping creates a port forwarding rule
+func (c *Client) AddPortMapping(ctx context.Context, internal, external int, proto Protocol, desc string, lifetime time.Duration) (*PortMapping, error)
+
+// RemovePortMapping removes a port forwarding rule
+func (c *Client) RemovePortMapping(ctx context.Context, external int, proto Protocol) error
+
+// ListMappings returns all active port mappings
+func (c *Client) ListMappings(ctx context.Context) ([]PortMapping, error)
 ```
 
-#### NATInfo
+#### Info
 
 ```go
-type NATInfo struct {
-    BehindNAT   bool      // Whether behind NAT
-    NATType     string    // NAT type (symmetric, full-cone, etc.)
-    PublicIP    net.IP    // External IP address
-    GatewayIP   net.IP    // Gateway IP
-    UPnPEnabled bool      // UPnP available
-    NATPMPEnabled bool    // NAT-PMP available
+type Info struct {
+    ExternalIP   net.IP        // External/public IP address
+    InternalIP   net.IP        // Internal/private IP address
+    GatewayIP    net.IP        // Gateway IP
+    Type         Type          // NAT type (none, full_cone, restricted_cone, port_restricted, symmetric, unknown)
+    UPnPEnabled  bool          // UPnP available
+    NATPMPEnable bool          // NAT-PMP available
+    Latency      time.Duration // Detection latency
 }
 ```
 
-> **Known Limitation**: NAT detection (type detection, public IP via STUN, UPnP/NAT-PMP discovery) is fully functional. Port mapping operations are not yet functionally implemented; currently, `AddPortMapping` returns `ErrPortMapFailed`, and `RemovePortMapping` is a no-op that returns `nil`.
+> **Known Limitation**: NAT detection (type detection, public IP via STUN, UPnP/NAT-PMP discovery) is fully functional. Port mapping operations are not yet functionally implemented; internally, `addMappingUPnP` and `addMappingNATPMP` return `ErrNATUnsupported`, which causes `AddPortMapping` to return `ErrPortMapFailed`. `RemovePortMapping` is a no-op that returns `nil`.
 
 ---
 
@@ -514,13 +517,13 @@ func LoadConfig() (*Config, error)
 
 Loads configuration from file and environment.
 
-#### SaveConfig
+#### InitConfig
 
 ```go
-func SaveConfig(cfg *Config) error
+func InitConfig() error
 ```
 
-Saves configuration to file.
+Creates a default configuration file.
 
 #### DefaultConfig
 
@@ -538,9 +541,9 @@ type Config struct {
     Alerts    AlertsConfig
     NAT       NATConfig
     TUI       TUIConfig
-    Scripting ScriptConfig
+    Scripting ScriptingConfig
     Storage   StorageConfig
-    Logging   LogConfig
+    Logging   LoggingConfig
 }
 ```
 
@@ -554,18 +557,26 @@ The TUI package provides the terminal user interface.
 
 ### Functions
 
-#### NewApp
+#### NewModel
 
 ```go
-func NewApp(cfg *config.Config, scanner *scanner.Orchestrator, registry *tracker.Registry) *App
+func NewModel() Model
+func NewModelWithOrchestrator(orch *scanner.Orchestrator, subnet string) Model
+func NewModelWithOrchestratorAndStorage(orch *scanner.Orchestrator, subnet string, storage *tracker.Storage) Model
 ```
 
-Creates a new TUI application.
+Creates a new TUI model. Use the variant that matches your setup.
 
-**Methods:**
+**Run functions:**
 ```go
-// Run starts the TUI
-func (a *App) Run() error
+// Run starts the TUI with no pre-configured scanner
+func Run() error
+
+// RunWithOrchestrator starts the TUI with a scanner orchestrator
+func RunWithOrchestrator(orch *scanner.Orchestrator, subnet string) error
+
+// RunWithOrchestratorAndStorage starts the TUI with scanner and storage
+func RunWithOrchestratorAndStorage(orch *scanner.Orchestrator, subnet string, storage *tracker.Storage) error
 ```
 
 ### Views
@@ -584,37 +595,39 @@ The TUI provides four main views:
 
 The public API package provides stable interfaces for external integration.
 
-### Device Interface
+### Device
 
 ```go
-type Device interface {
-    IP() net.IP
-    MAC() net.HardwareAddr
-    Hostname() string
-    Vendor() string
-    Ports() []int
-    LastSeen() time.Time
-    Status() string
+type Device struct {
+    IP        net.IP                 // Device IP address
+    MAC       net.HardwareAddr       // MAC address (may be nil)
+    Hostname  string                 // Resolved hostname
+    Vendor    string                 // Vendor from OUI database
+    Ports     []int                  // Open ports discovered
+    LastSeen  time.Time              // Last discovery time
+    FirstSeen time.Time              // First discovery time
+    Status    DeviceStatus           // Current status
+    Metadata  map[string]interface{} // Additional metadata
 }
 ```
 
 ### Scanner Interface
 
 ```go
-type NetworkScanner interface {
-    Scan(ctx context.Context, subnet string) ([]Device, error)
-    ScanAll(ctx context.Context) ([]Device, error)
+type Scanner interface {
+    Scan(ctx context.Context, subnet string) (*ScanResult, error)
+    ScanWithOptions(ctx context.Context, opts ScanOptions) (*ScanResult, error)
 }
 ```
 
 ### Tracker Interface
 
 ```go
-type DeviceTracker interface {
-    GetDevice(ip string) (Device, error)
+type Tracker interface {
+    Update(devices []Device) error
     GetDevices() []Device
+    GetDevice(ip string) (Device, error)
     GetAlerts() []Alert
-    Subscribe() <-chan Alert
 }
 ```
 

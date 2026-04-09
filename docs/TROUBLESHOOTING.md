@@ -36,12 +36,8 @@ This guide helps diagnose and resolve common issues with TuiMap.
    sudo setcap cap_net_raw+ep /usr/local/bin/tuimap
    ```
 
-3. **Use TCP-only mode (no root required):**
-   ```bash
-   tuimap scan --methods tcp
-   ```
-
-4. **Update configuration to use TCP only:**
+3. **Use TCP-only scanning (no root required):**
+   Configure TCP-only scanning in `~/.config/tuimap/config.yaml`:
    ```yaml
    scanner:
      methods:
@@ -65,7 +61,7 @@ This guide helps diagnose and resolve common issues with TuiMap.
 
 2. **Specify correct interface:**
    ```bash
-   tuimap scan --interface eth0
+   tuimap --interface eth0 scan
    ```
 
 3. **Check interface is up:**
@@ -113,11 +109,15 @@ This guide helps diagnose and resolve common issues with TuiMap.
    arping -c 3 192.168.1.1  # ARP ping
    ```
 
-5. **Try each method individually:**
+5. **Try scanning with debug mode:**
    ```bash
-   tuimap scan --methods arp --debug
-   tuimap scan --methods icmp --debug
-   tuimap scan --methods tcp --debug
+   tuimap scan --debug
+   ```
+   Configure individual scan methods in `~/.config/tuimap/config.yaml`:
+   ```yaml
+   scanner:
+     methods:
+       - arp   # Try each method individually
    ```
 
 ### Scan takes too long
@@ -321,7 +321,8 @@ This guide helps diagnose and resolve common issues with TuiMap.
 
 2. **Reset to defaults:**
    ```bash
-   tuimap config init --force
+   rm ~/.config/tuimap/config.yaml
+   tuimap config init
    ```
 
 3. **View current config:**
@@ -496,7 +497,7 @@ This guide helps diagnose and resolve common issues with TuiMap.
 1. **Check script syntax:**
    ```bash
    # Tengo scripts should be valid Tengo syntax
-   tuimap script validate your-script.tengo
+   # Review your script for syntax errors before running
    ```
 
 2. **Check API usage:**
@@ -505,7 +506,7 @@ This guide helps diagnose and resolve common issues with TuiMap.
 
 3. **Enable debug mode:**
    ```bash
-   tuimap script run your-script.tengo --debug
+   tuimap --debug
    ```
 
 ### Script timeout
@@ -615,7 +616,6 @@ tuimap version
 
 ```bash
 tuimap config show
-tuimap config validate  # If available
 ```
 
 ### Network diagnostics
@@ -647,10 +647,8 @@ journalctl -u tuimap
 ### Test scan methods
 
 ```bash
-# Test each method individually
-tuimap scan --methods arp --subnet 192.168.1.0/24 --debug
-tuimap scan --methods icmp --subnet 192.168.1.0/24 --debug
-tuimap scan --methods tcp --subnet 192.168.1.0/24 --debug
+# Run a scan with debug mode to see which methods are being used
+tuimap scan --subnet 192.168.1.0/24 --debug
 ```
 
 ---
@@ -662,9 +660,10 @@ If these solutions don't resolve your issue:
 1. **Check GitHub Issues:**
    https://github.com/opd-ai/tuimap/issues
 
-2. **Run diagnostic report:**
+2. **Collect diagnostic information:**
    ```bash
-   tuimap diagnose > diagnostic-report.txt
+   tuimap version
+   tuimap config show
    ```
 
 3. **Open new issue with:**
