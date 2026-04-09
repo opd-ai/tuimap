@@ -17,6 +17,9 @@ GOCLEAN=$(GOCMD) clean
 GOMOD=$(GOCMD) mod
 GOFMT=$(GOCMD) fmt
 
+# Disable CGO for fully static, pure-Go builds
+export CGO_ENABLED=0
+
 # Linker flags
 LDFLAGS=-ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)"
 
@@ -28,10 +31,15 @@ build:
 	@mkdir -p $(GOBIN)
 	$(GOBUILD) $(LDFLAGS) -o $(GOBIN)/$(BINARY_NAME) ./cmd/tuimap
 
-## test: Run tests
+## test: Run tests (note: -race requires CGO_ENABLED=1, use 'make test-race' for race detection)
 test:
 	@echo "Running tests..."
-	$(GOTEST) -v -race -coverprofile=coverage.out ./...
+	$(GOTEST) -v -coverprofile=coverage.out ./...
+
+## test-race: Run tests with race detector (requires CGO_ENABLED=1)
+test-race:
+	@echo "Running tests with race detector..."
+	CGO_ENABLED=1 $(GOTEST) -v -race ./...
 
 ## test-coverage: Run tests with coverage report
 test-coverage: test
