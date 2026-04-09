@@ -81,11 +81,10 @@ sudo tuimap scan
 sudo tuimap scan --subnet 192.168.1.0/24
 
 # Specific interface
-sudo tuimap scan --interface eth0
-
-# TCP-only (no root needed)
-tuimap scan --methods tcp
+sudo tuimap --interface eth0 scan
 ```
+
+> **Tip:** To use TCP-only scanning (no root needed), set `methods: [tcp]` in your configuration file.
 
 ### Scan Performance
 
@@ -277,7 +276,7 @@ if rtt > 0 {
 }
 
 // Scan specific ports
-ports := port_scan("192.168.1.1", [22, 80, 443])
+ports := portScan("192.168.1.1", [22, 80, 443])
 for port in ports {
     fmt.println("Port", port, "is open")
 }
@@ -290,17 +289,9 @@ ips := resolve("example.com")
 
 ```tengo
 // Get all devices
-devices := get_devices()
+devices := getDevices()
 for device in devices {
     fmt.println(device.ip, device.hostname, device.status)
-}
-
-// Get specific device
-device := get_device("192.168.1.1")
-if device {
-    fmt.println("Hostname:", device.hostname)
-    fmt.println("Vendor:", device.vendor)
-    fmt.println("Ports:", device.ports)
 }
 
 // Generate alert
@@ -331,7 +322,7 @@ delete("last_scan_count")
 important_ports := [22, 3389, 5900]  // SSH, RDP, VNC
 allowed_ips := ["192.168.1.1", "192.168.1.10"]
 
-devices := get_devices()
+devices := getDevices()
 for device in devices {
     if device.ip in allowed_ips {
         continue
@@ -352,7 +343,7 @@ for device in devices {
 // device_stats.tengo
 // Track device counts over time
 
-devices := get_devices()
+devices := getDevices()
 online_count := 0
 for device in devices {
     if device.status == "online" {
@@ -429,11 +420,8 @@ Tab interface for each tool:
 |-----|--------|
 | `q` | Quit |
 | `s` | Start scan |
+| `n` | Next subnet |
 | `r` | Refresh |
-| `f` | Filter |
-| `?` | Help |
-| `Tab` | Next pane |
-| `Shift+Tab` | Previous pane |
 
 ## Advanced Configuration
 
@@ -577,7 +565,6 @@ alerts:
 nat:
   detect: true
   upnp_enabled: true
-  nat_pmp_enabled: true
   public_ip_check: true
   stun_servers:
     - stun.l.google.com:19302
@@ -585,24 +572,18 @@ nat:
 # TUI configuration
 tui:
   refresh_rate: 30
-  theme: default
+  theme: dark
   keybindings:
     quit: q
     scan: s
     refresh: r
-    filter: f
-    help: "?"
-    view_map: "1"
-    view_list: "2"
-    view_tools: "3"
-    view_scripts: "4"
 
 # Scripting configuration
 scripting:
   enabled: true
   max_execution_time: 30s
-  max_memory: 52428800
-  scripts_dir: ~/.config/tuimap/scripts
+  max_memory: "50MB"
+  script_dir: ~/.config/tuimap/scripts
 
 # Storage configuration
 storage:

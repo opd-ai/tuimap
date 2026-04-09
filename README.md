@@ -1,6 +1,6 @@
 # TuiMap
 
-[![Go Version](https://img.shields.io/badge/go-1.21+-blue.svg)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/go-1.25+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 TuiMap is a terminal-based network diagnostic and mapping tool built in Go, designed for real-time network analysis with an emphasis on speed and accuracy in NAT environments.
@@ -81,7 +81,7 @@ See the generated config file for detailed options and defaults.
 
 ### Prerequisites
 
-- Go 1.21 or higher
+- Go 1.25 or higher
 - Make (optional, for using Makefile)
 
 ### Building
@@ -120,7 +120,7 @@ tuimap/
 ├── docs/                # Documentation
 ├── Makefile             # Build automation
 ├── go.mod               # Go module definition
-└── PLAN.md              # Implementation roadmap
+└── ROADMAP.md           # Implementation roadmap
 ```
 
 ## Current Status
@@ -137,7 +137,7 @@ The foundational structure is in place:
 
 **Next Phase: Phase 1 - Core Network Scanner**
 
-See [PLAN.md](PLAN.md) for the complete implementation roadmap.
+See [ROADMAP.md](ROADMAP.md) for the complete implementation roadmap.
 
 ## Known Limitations
 
@@ -162,7 +162,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Phase 6** (Week 10): NAT & Advanced Features
 - **Phase 7** (Weeks 11-12): Testing & Documentation
 
-See [PLAN.md](PLAN.md) for detailed milestones and progress tracking.
+See [ROADMAP.md](ROADMAP.md) for detailed milestones and progress tracking.
 
 ## Acknowledgments
 

@@ -44,12 +44,11 @@ Network health diagnostics that:
 ### Network Functions
 - `scan()` - Perform network scan, returns result object
 - `ping(ip)` - ICMP ping, returns latency
-- `port_scan(ip, ports)` - TCP port scan
+- `portScan(ip, ports)` - TCP port scan
 - `resolve(hostname)` - DNS lookup
 
 ### Device Management
-- `get_devices()` - Get all tracked devices
-- `get_device(ip)` - Get specific device by IP
+- `getDevices()` - Get all tracked devices
 
 ### Alert Functions
 - `alert(type, message)` - Create alert with type and message
@@ -81,9 +80,6 @@ result.method     // Scan method used
 ## Running Scripts
 
 ```bash
-# Run a script
-tuimap script run scripts/examples/auto-scan.tengo
-
 # Run with TUI script console
 tuimap  # Then press '4' for Script Console
 ```
@@ -92,7 +88,7 @@ tuimap  # Then press '4' for Script Console
 
 1. Create a `.tengo` file in `~/.config/tuimap/scripts/`
 2. Use the API functions documented above
-3. Test with `tuimap script run your-script.tengo`
+3. Load and run scripts via the TUI Script Console (press `4`)
 
 ### Best Practices
 

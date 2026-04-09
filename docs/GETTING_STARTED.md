@@ -4,7 +4,7 @@ Welcome to TuiMap! This guide will help you get started with the terminal-based 
 
 ## Prerequisites
 
-- Go 1.22 or higher (for building from source)
+- Go 1.25 or higher (for building from source)
 - Root/admin privileges (for full scanning capabilities)
 - Linux, macOS, or Windows
 
@@ -119,7 +119,6 @@ alerts:
 nat:
   detect: true            # Detect NAT environment
   upnp_enabled: true      # Use UPnP for gateway info
-  nat_pmp_enabled: true   # Use NAT-PMP
   public_ip_check: true   # Check public IP via STUN
   stun_servers:
     - stun.l.google.com:19302
@@ -131,17 +130,11 @@ nat:
 ```yaml
 tui:
   refresh_rate: 30        # FPS for UI updates
-  theme: default          # Color theme
+  theme: dark             # Color theme
   keybindings:
     quit: q
     scan: s
     refresh: r
-    filter: f
-    help: "?"
-    view_map: "1"
-    view_list: "2"
-    view_tools: "3"
-    view_scripts: "4"
 ```
 
 ### Scripting Settings
@@ -150,8 +143,8 @@ tui:
 scripting:
   enabled: true
   max_execution_time: 30s # Maximum script runtime
-  max_memory: 52428800    # 50MB memory limit
-  scripts_dir: ~/.config/tuimap/scripts
+  max_memory: "50MB"      # 50MB memory limit
+  script_dir: ~/.config/tuimap/scripts
 ```
 
 ## TUI Navigation
@@ -165,9 +158,8 @@ Once TuiMap is running, use these keyboard shortcuts:
 | `3` | Network Tools View |
 | `4` | Script Console View |
 | `s` | Start Network Scan |
+| `n` | Next Subnet |
 | `r` | Refresh Display |
-| `f` | Filter Devices |
-| `?` | Show Help |
 | `q` | Quit |
 
 ## Network Tools
@@ -214,18 +206,16 @@ TuiMap supports automation via Tengo scripts. Scripts are located in `~/.config/
 **Network Operations:**
 - `scan()` - Run network scan
 - `ping(host)` - Ping a host
-- `port_scan(host, ports)` - Scan specific ports
+- `portScan(host, ports)` - Scan specific ports
 - `resolve(hostname)` - DNS resolution
 
 **Device Management:**
-- `get_devices()` - Get all tracked devices
-- `get_device(ip)` - Get specific device
-- `alert(type, message)` - Generate alert
+- `getDevices()` - Get all tracked devices
+- `alert(level, message)` - Generate alert
 
 **Storage:**
 - `set(key, value)` - Store persistent value
 - `get(key)` - Retrieve value
-- `delete(key)` - Remove value
 
 ### Example Script
 
@@ -233,7 +223,7 @@ TuiMap supports automation via Tengo scripts. Scripts are located in `~/.config/
 // alert_on_new_ssh.tengo
 // Alert when a new device with SSH port is found
 
-devices := get_devices()
+devices := getDevices()
 for device in devices {
     if 22 in device.ports && device.status == "new" {
         alert("new_device", "New SSH server: " + device.ip)
@@ -275,7 +265,7 @@ sudo setcap cap_net_raw+ep /usr/local/bin/tuimap
 
 ### Configuration issues
 - Run `tuimap config show` to verify settings
-- Reset with `tuimap config init --force`
+- Reset by removing the config file and running `tuimap config init`
 
 ## License
 
