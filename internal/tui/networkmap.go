@@ -319,12 +319,12 @@ func renderRouterSection(routers []NetworkNode, ds diagramStyles) string {
 		if i == len(routers)-1 {
 			prefix = ds.line.Render("    └── ")
 		}
-		b.WriteString(fmt.Sprintf("%s%s %s %s\n",
+		fmt.Fprintf(&b, "%s%s %s %s\n",
 			prefix,
 			statusIcon,
 			ds.router.Render(truncate(r.Label, 18)),
 			ds.dimmed.Render(ip),
-		))
+		)
 	}
 
 	return b.String()
@@ -346,12 +346,12 @@ func renderClientSection(clients []NetworkNode, ds diagramStyles, width int) str
 		}
 
 		info := ds.client.Render(truncate(c.Label, 18))
-		b.WriteString(fmt.Sprintf("%s%s %s %s",
+		fmt.Fprintf(&b, "%s%s %s %s",
 			prefix,
 			statusIcon,
 			info,
 			ds.dimmed.Render(ip),
-		))
+		)
 
 		// Add port info if available
 		if len(c.Device.Ports) > 0 {

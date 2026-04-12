@@ -118,7 +118,7 @@ func parseLinuxRoutingTable() ([]SubnetInfo, error) {
 	if err != nil {
 		return DiscoverSubnets()
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var subnets []SubnetInfo
 	scanner := bufio.NewScanner(file)

@@ -782,7 +782,7 @@ func TestScanResultMsgWithStoragePersistence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	m := NewModelWithOrchestratorAndStorage(nil, "", storage)
 	m.ready = true
@@ -819,7 +819,7 @@ func TestStorageLoadOnStartup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	devices := []scanner.Device{
 		{IP: net.ParseIP("10.0.0.1"), Hostname: "stored-host", Status: scanner.StatusOnline},

@@ -42,7 +42,7 @@ Features:
 	Run: func(cmd *cobra.Command, args []string) {
 		if noTUI {
 			// Headless mode - show help for now
-			cmd.Help()
+			_ = cmd.Help()
 			return
 		}
 
@@ -75,7 +75,7 @@ Features:
 		}
 		defer func() {
 			if storage != nil {
-				storage.Close()
+				_ = storage.Close()
 			}
 		}()
 

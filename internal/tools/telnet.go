@@ -78,7 +78,7 @@ func (t *TelnetTool) runTelnet(ctx context.Context, host, port string, output ch
 		output <- fmt.Sprintf("telnet: Unable to connect to remote host: %v\n", err)
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	output <- fmt.Sprintf("Connected to %s.\n", host)
 	output <- "Escape character is '^]'.\n"
@@ -95,7 +95,7 @@ func (t *TelnetTool) dialTelnet(ctx context.Context, addr string) (net.Conn, err
 
 // readTelnetData reads data from connection and sends to output.
 func (t *TelnetTool) readTelnetData(ctx context.Context, conn net.Conn, output chan<- string) {
-	conn.SetReadDeadline(time.Now().Add(t.timeout))
+	_ = conn.SetReadDeadline(time.Now().Add(t.timeout))
 	reader := bufio.NewReader(conn)
 
 	for {
@@ -134,11 +134,11 @@ func (t *TelnetTool) handleNegotiation(conn net.Conn) {
 			case 0xFB: // WILL - respond with DONT
 				response[1] = 0xFE
 				response[2] = buf[2]
-				conn.Write(response)
+				_, _ = conn.Write(response)
 			case 0xFD: // DO - respond with WONT
 				response[1] = 0xFC
 				response[2] = buf[2]
-				conn.Write(response)
+				_, _ = conn.Write(response)
 			case 0xFC, 0xFE: // WONT/DONT - ignore
 				continue
 			}
@@ -171,13 +171,13 @@ func (t *TelnetTool) Connect(ctx context.Context, host string, port int) (string
 	if err != nil {
 		return "", err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Handle negotiation in background
 	go t.handleNegotiation(conn)
 
 	// Read banner with timeout
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	buf := make([]byte, 4096)
 	n, _ := conn.Read(buf)
 

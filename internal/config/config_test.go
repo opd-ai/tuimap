@@ -127,16 +127,22 @@ func TestLoadConfigNoFile(t *testing.T) {
 func TestInitConfigAlreadyExists(t *testing.T) {
 	// Save original home
 	origHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", origHome)
+	defer func() { _ = os.Setenv("HOME", origHome) }()
 
 	// Create temp home with existing config
 	tmpDir := t.TempDir()
-	os.Setenv("HOME", tmpDir)
+	if err := os.Setenv("HOME", tmpDir); err != nil {
+		t.Fatalf("Failed to set HOME: %v", err)
+	}
 
 	configDir := filepath.Join(tmpDir, ".config", "tuimap")
-	os.MkdirAll(configDir, 0o755)
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("Failed to create config dir: %v", err)
+	}
 	configPath := filepath.Join(configDir, "config.yaml")
-	os.WriteFile(configPath, []byte("test: value"), 0o644)
+	if err := os.WriteFile(configPath, []byte("test: value"), 0o644); err != nil {
+		t.Fatalf("Failed to write config file: %v", err)
+	}
 
 	// InitConfig should fail
 	err := InitConfig()
@@ -297,11 +303,13 @@ func TestTUIKeybindings(t *testing.T) {
 func TestInitConfigSuccess(t *testing.T) {
 	// Save original home
 	origHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", origHome)
+	defer func() { _ = os.Setenv("HOME", origHome) }()
 
 	// Create temp home without config
 	tmpDir := t.TempDir()
-	os.Setenv("HOME", tmpDir)
+	if err := os.Setenv("HOME", tmpDir); err != nil {
+		t.Fatalf("Failed to set HOME: %v", err)
+	}
 
 	// InitConfig should succeed
 	err := InitConfig()
@@ -319,17 +327,21 @@ func TestInitConfigSuccess(t *testing.T) {
 func TestLoadConfigFromFile(t *testing.T) {
 	// Save original home
 	origHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", origHome)
+	defer func() { _ = os.Setenv("HOME", origHome) }()
 
 	// Create temp home with valid config
 	tmpDir := t.TempDir()
-	os.Setenv("HOME", tmpDir)
+	if err := os.Setenv("HOME", tmpDir); err != nil {
+		t.Fatalf("Failed to set HOME: %v", err)
+	}
 
 	// Reset viper for this test
 	viper.Reset()
 
 	configDir := filepath.Join(tmpDir, ".config", "tuimap")
-	os.MkdirAll(configDir, 0o755)
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("Failed to create config dir: %v", err)
+	}
 	configPath := filepath.Join(configDir, "config.yaml")
 
 	// Write a valid config with explicit scanner and tui sections
@@ -368,7 +380,9 @@ tui:
     refresh: r
     scan: s
 `
-	os.WriteFile(configPath, []byte(configContent), 0o644)
+	if err := os.WriteFile(configPath, []byte(configContent), 0o644); err != nil {
+		t.Fatalf("Failed to write config file: %v", err)
+	}
 
 	// LoadConfig should read from file
 	cfg, err := LoadConfig()
@@ -397,21 +411,27 @@ tui:
 func TestLoadConfigInvalidYAML(t *testing.T) {
 	// Save original home
 	origHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", origHome)
+	defer func() { _ = os.Setenv("HOME", origHome) }()
 
 	// Create temp home with invalid config
 	tmpDir := t.TempDir()
-	os.Setenv("HOME", tmpDir)
+	if err := os.Setenv("HOME", tmpDir); err != nil {
+		t.Fatalf("Failed to set HOME: %v", err)
+	}
 
 	// Reset viper for this test
 	viper.Reset()
 
 	configDir := filepath.Join(tmpDir, ".config", "tuimap")
-	os.MkdirAll(configDir, 0o755)
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("Failed to create config dir: %v", err)
+	}
 	configPath := filepath.Join(configDir, "config.yaml")
 
 	// Write malformed YAML that causes parse error
-	os.WriteFile(configPath, []byte("scanner:\n  timeout: not_a_duration\n"), 0o644)
+	if err := os.WriteFile(configPath, []byte("scanner:\n  timeout: not_a_duration\n"), 0o644); err != nil {
+		t.Fatalf("Failed to write config file: %v", err)
+	}
 
 	// LoadConfig should fail on unmarshal
 	_, err := LoadConfig()

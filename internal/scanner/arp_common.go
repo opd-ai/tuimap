@@ -4,7 +4,6 @@ package scanner
 import (
 	"fmt"
 	"net"
-	"sync"
 	"time"
 )
 
@@ -18,8 +17,7 @@ type ARPScanner struct {
 	retries   int
 	localIP   net.IP
 	localMAC  net.HardwareAddr
-	ouiDB     OUIDatabase
-	ouiDBOnce sync.Once
+	ouiDB OUIDatabase
 }
 
 // OUIDatabase provides MAC vendor lookup functionality.
