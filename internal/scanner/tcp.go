@@ -155,7 +155,7 @@ func (s *TCPScanner) tcpConnect(ctx context.Context, ip net.IP, port int) bool {
 	if err != nil {
 		return false
 	}
-	conn.Close()
+	_ = conn.Close()
 	return true
 }
 

@@ -49,7 +49,7 @@ func setConnDeadline(conn *icmp.PacketConn, ctx context.Context, timeout time.Du
 	if !ok {
 		deadline = time.Now().Add(timeout)
 	}
-	conn.SetDeadline(deadline)
+	_ = conn.SetDeadline(deadline)
 }
 
 // isEchoReply checks if the ICMP message is an echo reply.
@@ -137,10 +137,10 @@ func openICMPConns() icmpConns {
 // close closes both ICMP connections.
 func (c *icmpConns) close() {
 	if c.priv != nil {
-		c.priv.Close()
+		_ = c.priv.Close()
 	}
 	if c.unpriv != nil {
-		c.unpriv.Close()
+		_ = c.unpriv.Close()
 	}
 }
 
@@ -215,7 +215,7 @@ func (s *ICMPScanner) pingWithConn(ctx context.Context, ip net.IP, conn *icmp.Pa
 		}
 
 		reply := make([]byte, 1500)
-		conn.SetReadDeadline(time.Now().Add(s.timeout))
+		_ = conn.SetReadDeadline(time.Now().Add(s.timeout))
 		n, peer, err := conn.ReadFrom(reply)
 		if err != nil {
 			continue

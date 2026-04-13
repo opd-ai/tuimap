@@ -162,7 +162,7 @@ func defaultPinger(ctx context.Context, host string) (bool, time.Duration) {
 			return false, 0
 		}
 	}
-	conn.Close()
+	_ = conn.Close()
 	return true, time.Since(start)
 }
 
@@ -179,7 +179,7 @@ func defaultPortScanner(ctx context.Context, host string, ports []int) []int {
 		conn, err := net.DialTimeout("tcp", addr, 500*time.Millisecond)
 		if err == nil {
 			openPorts = append(openPorts, port)
-			conn.Close()
+			_ = conn.Close()
 		}
 	}
 	return openPorts

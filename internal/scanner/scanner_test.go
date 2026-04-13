@@ -861,7 +861,7 @@ func TestTCPScannerScanWithLocalhostPort(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create listener: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	port := listener.Addr().(*net.TCPAddr).Port
 

@@ -25,7 +25,7 @@ func TestIntegrationFullWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	// Create registry
 	registry := NewRegistry(1 * time.Second)
@@ -202,7 +202,7 @@ func TestIntegrationStoragePersistence(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create storage: %v", err)
 		}
-		defer storage.Close()
+		defer func() { _ = storage.Close() }()
 
 		device := scanner.Device{
 			IP:       net.ParseIP("10.0.0.1"),
@@ -227,7 +227,7 @@ func TestIntegrationStoragePersistence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to reopen storage: %v", err)
 	}
-	defer storage.Close()
+	defer func() { _ = storage.Close() }()
 
 	devices, err := storage.LoadDevices()
 	if err != nil {

@@ -145,7 +145,7 @@ func (t *TracerouteTool) trace(ctx context.Context, dest net.IP, maxHops int) []
 		// Fall back to UDP-based traceroute
 		return t.traceUDP(ctx, dest, maxHops)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	for ttl := 1; ttl <= maxHops; ttl++ {
 		select {
@@ -197,7 +197,7 @@ func (t *TracerouteTool) probeICMP(conn *icmp.PacketConn, dest net.IP, ttl int) 
 	}
 
 	// Wait for response
-	conn.SetReadDeadline(time.Now().Add(t.timeout))
+	_ = conn.SetReadDeadline(time.Now().Add(t.timeout))
 	reply := make([]byte, 1500)
 	n, peer, err := conn.ReadFrom(reply)
 	rtt := time.Since(start)
@@ -268,10 +268,10 @@ func (t *TracerouteTool) probeUDP(dest net.IP, ttl int) Hop {
 	if err != nil {
 		return Hop{Timeout: true}
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	start := time.Now()
-	conn.Write([]byte("TRACE"))
+	_, _ = conn.Write([]byte("TRACE"))
 
 	// Wait for timeout (no response expected, just measure RTT)
 	time.Sleep(100 * time.Millisecond)

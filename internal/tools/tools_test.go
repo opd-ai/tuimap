@@ -270,7 +270,7 @@ func BenchmarkNetcatValidate(b *testing.B) {
 	args := []string{"localhost", "80"}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		nc.Validate(args)
+		_ = nc.Validate(args)
 	}
 }
 
@@ -285,7 +285,7 @@ func BenchmarkTelnetValidate(b *testing.B) {
 	args := []string{"localhost", "23"}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		telnet.Validate(args)
+		_ = telnet.Validate(args)
 	}
 }
 
@@ -309,7 +309,7 @@ func BenchmarkTracerouteValidate(b *testing.B) {
 	args := []string{"google.com"}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tr.Validate(args)
+		_ = tr.Validate(args)
 	}
 }
 
@@ -324,7 +324,7 @@ func BenchmarkDigValidate(b *testing.B) {
 	args := []string{"example.com", "A"}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		dig.Validate(args)
+		_ = dig.Validate(args)
 	}
 }
 
@@ -339,7 +339,7 @@ func BenchmarkWhoisValidate(b *testing.B) {
 	args := []string{"example.com"}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		whois.Validate(args)
+		_ = whois.Validate(args)
 	}
 }
 
@@ -827,7 +827,7 @@ func TestNetcatExecuteWithLocalServer(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create listener: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	// Get the port
 	port := listener.Addr().(*net.TCPAddr).Port
@@ -838,8 +838,8 @@ func TestNetcatExecuteWithLocalServer(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
-		conn.Write([]byte("Hello from server\n"))
+		defer func() { _ = conn.Close() }()
+		_, _ = conn.Write([]byte("Hello from server\n"))
 	}()
 
 	nc := NewNetcatTool(2 * time.Second)
@@ -868,7 +868,7 @@ func TestTelnetExecuteWithLocalServer(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create listener: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	port := listener.Addr().(*net.TCPAddr).Port
 
@@ -877,8 +877,8 @@ func TestTelnetExecuteWithLocalServer(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
-		conn.Write([]byte("Welcome to telnet\n"))
+		defer func() { _ = conn.Close() }()
+		_, _ = conn.Write([]byte("Welcome to telnet\n"))
 	}()
 
 	telnet := NewTelnetTool(2 * time.Second)
@@ -906,7 +906,7 @@ func TestNetcatSendData(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create listener: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	port := listener.Addr().(*net.TCPAddr).Port
 
@@ -916,7 +916,7 @@ func TestNetcatSendData(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		buf := make([]byte, 1024)
 		n, _ := conn.Read(buf)
 		received <- string(buf[:n])
@@ -951,7 +951,7 @@ func TestNetcatBannerWithServer(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create listener: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	port := listener.Addr().(*net.TCPAddr).Port
 
@@ -960,8 +960,8 @@ func TestNetcatBannerWithServer(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
-		conn.Write([]byte("SSH-2.0-TestServer\n"))
+		defer func() { _ = conn.Close() }()
+		_, _ = conn.Write([]byte("SSH-2.0-TestServer\n"))
 	}()
 
 	nc := NewNetcatTool(2 * time.Second)
@@ -984,7 +984,7 @@ func TestTelnetConnectWithServer(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create listener: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	port := listener.Addr().(*net.TCPAddr).Port
 
@@ -993,8 +993,8 @@ func TestTelnetConnectWithServer(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
-		conn.Write([]byte("Welcome to server\n"))
+		defer func() { _ = conn.Close() }()
+		_, _ = conn.Write([]byte("Welcome to server\n"))
 	}()
 
 	telnet := NewTelnetTool(2 * time.Second)
@@ -1018,14 +1018,14 @@ func TestNetcatTCPConnectSuccess(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create listener: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	port := listener.Addr().(*net.TCPAddr).Port
 
 	go func() {
 		conn, _ := listener.Accept()
 		if conn != nil {
-			conn.Close()
+			_ = conn.Close()
 		}
 	}()
 
@@ -1250,7 +1250,7 @@ func TestNetcatUDPMode(t *testing.T) {
 	if err != nil {
 		t.Skipf("Cannot create UDP listener: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	port := conn.LocalAddr().(*net.UDPAddr).Port
 
@@ -1296,7 +1296,7 @@ func TestTelnetHandleNegotiationScenarios(t *testing.T) {
 			if err != nil {
 				t.Skipf("Cannot create listener: %v", err)
 			}
-			defer listener.Close()
+			defer func() { _ = listener.Close() }()
 
 			port := listener.Addr().(*net.TCPAddr).Port
 
@@ -1307,13 +1307,13 @@ func TestTelnetHandleNegotiationScenarios(t *testing.T) {
 				if err != nil {
 					return
 				}
-				defer conn.Close()
+				defer func() { _ = conn.Close() }()
 				// Send negotiation command
-				conn.Write(tt.send)
+				_, _ = conn.Write(tt.send)
 				// Wait a bit for response
 				time.Sleep(50 * time.Millisecond)
 				// Send some data
-				conn.Write([]byte("Hello\n"))
+				_, _ = conn.Write([]byte("Hello\n"))
 			}()
 
 			telnet := NewTelnetTool(1 * time.Second)

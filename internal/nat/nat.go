@@ -270,7 +270,7 @@ func stunRequest(ctx context.Context, server string) (net.IP, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dial failed: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if err := conn.SetDeadline(deadline); err != nil {
 		return nil, err
@@ -428,7 +428,7 @@ func getLocalIP() (net.IP, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 	return localAddr.IP, nil
@@ -451,7 +451,7 @@ func (c *Client) discoverUPnP(ctx context.Context) bool {
 	if err != nil {
 		return false
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if err := setUDPDeadline(conn, ctx, 2*time.Second); err != nil {
 		return false
@@ -490,7 +490,7 @@ func (c *Client) discoverNATPMP(ctx context.Context) bool {
 	if err != nil {
 		return false
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if err := setUDPDeadline(conn, ctx, 2*time.Second); err != nil {
 		return false

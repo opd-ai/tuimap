@@ -96,7 +96,7 @@ func (t *NetcatTool) runNetcat(ctx context.Context, opts netcatOptions, output c
 		output <- fmt.Sprintf("Connection failed: %v\n", err)
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	output <- fmt.Sprintf("Connected to %s\n", addr)
 
@@ -127,7 +127,7 @@ func (t *NetcatTool) sendData(conn net.Conn, data string, output chan<- string) 
 
 // readResponses reads and outputs responses from the connection.
 func (t *NetcatTool) readResponses(ctx context.Context, conn net.Conn, output chan<- string) {
-	conn.SetReadDeadline(time.Now().Add(t.timeout))
+	_ = conn.SetReadDeadline(time.Now().Add(t.timeout))
 	scanner := bufio.NewScanner(conn)
 	for scanner.Scan() {
 		select {
@@ -149,7 +149,7 @@ func (t *NetcatTool) TCPConnect(ctx context.Context, host string, port int) (boo
 	if err != nil {
 		return false, 0, err
 	}
-	conn.Close()
+	_ = conn.Close()
 	return true, time.Since(start), nil
 }
 
@@ -162,9 +162,9 @@ func (t *NetcatTool) Banner(ctx context.Context, host string, port int) (string,
 	if err != nil {
 		return "", err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	buf := make([]byte, 1024)
 	n, err := conn.Read(buf)
 	if err != nil {

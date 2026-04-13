@@ -156,7 +156,7 @@ func (t *WhoisTool) query(ctx context.Context, server, query string) (string, er
 	if err != nil {
 		return "", fmt.Errorf("failed to connect to %s: %w", server, err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Set deadline for the entire operation
 	if err := conn.SetDeadline(time.Now().Add(t.timeout)); err != nil {
